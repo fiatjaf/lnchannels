@@ -1,4 +1,7 @@
 *.swo
 *.swp
+*.db
+*.db-journal
+*.env
 /target
 **/*.rs.bk
