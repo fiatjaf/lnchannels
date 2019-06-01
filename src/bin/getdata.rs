@@ -1,5 +1,6 @@
 #![recursion_limit = "1024"]
 
+extern crate docopt;
 extern crate jsonrpc;
 extern crate reqwest;
 extern crate rusqlite;
@@ -8,91 +9,42 @@ extern crate serde_json;
 #[macro_use]
 extern crate error_chain;
 
+use docopt::Docopt;
 use rusqlite::types::ToSql;
 use rusqlite::{Connection, NO_PARAMS};
+use serde::Deserialize;
 use serde_json::{Number, Value};
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
-
-mod errors {
-    error_chain! {
-      foreign_links {
-        SQLite(rusqlite::Error);
-      }
-    }
-}
-
-mod lightning {
-    use serde::Deserialize;
-
-    #[derive(Deserialize)]
-    pub struct ListChannels {
-        pub channels: Vec<Channel>,
-    }
-
-    #[derive(Deserialize)]
-    pub struct Channel {
-        pub source: String,
-        pub destination: String,
-        pub short_channel_id: String,
-        pub satoshis: i64,
-    }
-}
-
-mod bitcoin {
-    use serde::Deserialize;
-
-    #[derive(Deserialize)]
-    pub struct Block {
-        pub tx: Vec<String>,
-    }
-
-    #[derive(Deserialize)]
-    pub struct DecodedTransaction {
-        pub vout: Vec<Output>,
-    }
-
-    #[derive(Deserialize)]
-    pub struct Output {
-        #[serde(rename(deserialize = "scriptPubKey"))]
-        pub script_pub_key: ScriptPubKey,
-    }
-
-    #[derive(Deserialize)]
-    pub struct ScriptPubKey {
-        pub addresses: Vec<String>,
-    }
-}
-
-mod smartbit {
-    use serde::Deserialize;
-
-    #[derive(Deserialize)]
-    pub struct SmartbitResponse {
-        pub address: Address,
-    }
-
-    #[derive(Deserialize)]
-    pub struct Address {
-        pub transactions: Vec<Transaction>,
-    }
-
-    #[derive(Deserialize)]
-    pub struct Transaction {
-        pub txid: String,
-        pub block: i64,
-    }
-}
 
 use bitcoin::*;
 use errors::*;
 use lightning::*;
 use smartbit::*;
 
+const USAGE: &'static str = "
+getdata
+
+Usage:
+  getdata [--justcheckcloses]
+
+Options:
+  --justcheckcloses     Skips fetching all lightning channels and upserting them (developer usage only).
+";
+
+#[derive(Deserialize)]
+struct Args {
+    flag_justcheckcloses: bool,
+}
+
 quick_main! {run}
 
 fn run() -> Result<()> {
+    let args: Args = Docopt::new(USAGE)
+        .and_then(|d| d.deserialize())
+        .unwrap_or_else(|e| e.exit());
+
     println!("creating sqlite database");
     let conn = Connection::open("channels.db").chain_err(|| "failed to open database")?;
 
@@ -116,70 +68,74 @@ fn run() -> Result<()> {
     )
     .chain_err(|| "failed to create table")?;
 
-    let channels = getchannels()?;
-    println!("inserting {} channels", channels.len());
-
     let mut i = 0;
-    for channel in channels.iter() {
-        let (node0, node1) = if channel.source < channel.destination {
-            (&channel.source, &channel.destination)
-        } else {
-            (&channel.destination, &channel.source)
-        };
 
-        conn.execute(
-            "INSERT INTO channels
+    if !args.flag_justcheckcloses {
+        let channels = getchannels()?;
+        println!("inserting {} channels", channels.len());
+
+        for channel in channels.iter() {
+            let (node0, node1) = if channel.source < channel.destination {
+                (&channel.source, &channel.destination)
+            } else {
+                (&channel.destination, &channel.source)
+            };
+
+            conn.execute(
+                "INSERT INTO channels
                 (short_channel_id, node0, node1, satoshis, last_seen)
             VALUES (?1, ?2, ?3, ?4, datetime('now'))
             ON CONFLICT (short_channel_id) DO UPDATE SET last_seen = excluded.last_seen",
-            &[
-                &channel.short_channel_id as &dyn ToSql,
-                node0 as &dyn ToSql,
-                node1 as &dyn ToSql,
-                &channel.satoshis as &dyn ToSql,
-            ],
-        )
-        .chain_err(|| "failed to insert")?;
+                &[
+                    &channel.short_channel_id as &dyn ToSql,
+                    node0 as &dyn ToSql,
+                    node1 as &dyn ToSql,
+                    &channel.satoshis as &dyn ToSql,
+                ],
+            )
+            .chain_err(|| "failed to insert")?;
 
-        println!(
-            "  {}: inserted {}-[{}]-{} at {}",
-            &i, node0, &channel.satoshis, node1, &channel.short_channel_id
-        );
-        i += 1;
-    }
+            println!(
+                "  {}: inserted {}-[{}]-{} at {}",
+                &i, node0, &channel.satoshis, node1, &channel.short_channel_id
+            );
+            i += 1;
+        }
 
-    println!("getting blockchain data");
-    i = 0;
-    let mut q = conn.prepare("SELECT short_channel_id FROM channels WHERE open_block IS NULL")?;
-    let mut rows = q.query(NO_PARAMS)?;
-    while let Some(row) = rows.next()? {
-        let short_channel_id: String = row.get(0)?;
+        println!("getting blockchain data");
+        i = 0;
+        let mut q =
+            conn.prepare("SELECT short_channel_id FROM channels WHERE open_block IS NULL")?;
+        let mut rows = q.query(NO_PARAMS)?;
+        while let Some(row) = rows.next()? {
+            let short_channel_id: String = row.get(0)?;
 
-        let blockchaindata = getchannelblockchaindata(&short_channel_id)?;
-        conn.execute(
-            "UPDATE channels SET open_block = ?2, open_transaction = ?3, address = ?4
+            let blockchaindata = getchannelblockchaindata(&short_channel_id)?;
+            conn.execute(
+                "UPDATE channels SET open_block = ?2, open_transaction = ?3, address = ?4
             WHERE short_channel_id = ?1",
-            &[
-                &short_channel_id as &dyn ToSql,
-                &blockchaindata.block as &dyn ToSql,
-                &blockchaindata.transaction as &dyn ToSql,
-                &blockchaindata.address as &dyn ToSql,
-            ],
-        )
-        .chain_err(|| "failed to update with blockchain data")?;
+                &[
+                    &short_channel_id as &dyn ToSql,
+                    &blockchaindata.block as &dyn ToSql,
+                    &blockchaindata.transaction as &dyn ToSql,
+                    &blockchaindata.address as &dyn ToSql,
+                ],
+            )
+            .chain_err(|| "failed to update with blockchain data")?;
 
-        println!(
-            "  {}: updated with blockchain data: {} {} {}",
-            &i, &blockchaindata.block, &blockchaindata.transaction, &blockchaindata.address
-        );
-        i += 1;
+            println!(
+                "  {}: updated with blockchain data: {} {} {}",
+                &i, &blockchaindata.block, &blockchaindata.transaction, &blockchaindata.address
+            );
+            i += 1;
+        }
     }
 
     println!("inspecting channels that may have been closed");
     i = 0;
     let mut q = conn.prepare(
         "SELECT short_channel_id, address FROM channels
-        WHERE last_seen < date('now', '-1 day')",
+        WHERE close_block IS NULL and last_seen < datetime('now', '-1 day')",
     )?;
     let mut rows = q.query(NO_PARAMS)?;
     while let Some(row) = rows.next()? {
@@ -313,5 +269,75 @@ fn getchannelclosedata(address: String) -> Result<Option<ChannelCloseData>> {
         }))
     } else {
         Ok(None)
+    }
+}
+
+mod errors {
+    error_chain! {
+      foreign_links {
+        SQLite(rusqlite::Error);
+      }
+    }
+}
+
+mod lightning {
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    pub struct ListChannels {
+        pub channels: Vec<Channel>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Channel {
+        pub source: String,
+        pub destination: String,
+        pub short_channel_id: String,
+        pub satoshis: i64,
+    }
+}
+
+mod bitcoin {
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    pub struct Block {
+        pub tx: Vec<String>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct DecodedTransaction {
+        pub vout: Vec<Output>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Output {
+        #[serde(rename(deserialize = "scriptPubKey"))]
+        pub script_pub_key: ScriptPubKey,
+    }
+
+    #[derive(Deserialize)]
+    pub struct ScriptPubKey {
+        pub addresses: Vec<String>,
+    }
+}
+
+mod smartbit {
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    pub struct SmartbitResponse {
+        pub address: Address,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Address {
+        pub transactions: Vec<Transaction>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Transaction {
+        pub txid: String,
+        pub block: i64,
     }
 }
