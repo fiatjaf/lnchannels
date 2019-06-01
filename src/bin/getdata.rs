@@ -16,7 +16,28 @@ use std::env;
 use std::time::Duration;
 
 mod errors {
-    error_chain! {}
+    error_chain! {
+      foreign_links {
+        SQLite(rusqlite::Error);
+      }
+    }
+}
+
+mod lightning {
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    pub struct ListChannels {
+        pub channels: Vec<Channel>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Channel {
+        pub source: String,
+        pub destination: String,
+        pub short_channel_id: String,
+        pub satoshis: i64,
+    }
 }
 
 mod bitcoin {
@@ -44,26 +65,30 @@ mod bitcoin {
     }
 }
 
-mod lightning {
+mod smartbit {
     use serde::Deserialize;
 
     #[derive(Deserialize)]
-    pub struct ListChannels {
-        pub channels: Vec<Channel>,
+    pub struct SmartbitResponse {
+        pub address: Address,
     }
 
     #[derive(Deserialize)]
-    pub struct Channel {
-        pub source: String,
-        pub destination: String,
-        pub short_channel_id: String,
-        pub satoshis: i64,
+    pub struct Address {
+        pub transactions: Vec<Transaction>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Transaction {
+        pub txid: String,
+        pub block: i64,
     }
 }
 
 use bitcoin::*;
 use errors::*;
 use lightning::*;
+use smartbit::*;
 
 quick_main! {run}
 
@@ -75,9 +100,9 @@ fn run() -> Result<()> {
         "CREATE TABLE IF NOT EXISTS channels (
             short_channel_id TEXT PRIMARY KEY,
 
-            open_block INTEGER NOT NULL,
-            open_transaction TEXT NOT NULL,
-            address TEXT NOT NULL,
+            open_block INTEGER,
+            open_transaction TEXT,
+            address TEXT,
             close_block INTEGER,
             close_transaction TEXT,
 
@@ -102,29 +127,86 @@ fn run() -> Result<()> {
             (&channel.destination, &channel.source)
         };
 
-        let blockchaindata = getchannelblockchaindata(channel)?;
-
         conn.execute(
             "INSERT INTO channels
-                (short_channel_id, open_block, open_transaction, address, node0, node1, satoshis, last_seen)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
+                (short_channel_id, node0, node1, satoshis, last_seen)
+            VALUES (?1, ?2, ?3, ?4, datetime('now'))
             ON CONFLICT (short_channel_id) DO UPDATE SET last_seen = excluded.last_seen",
             &[
                 &channel.short_channel_id as &dyn ToSql,
-                &blockchaindata.block as &dyn ToSql,
-                &blockchaindata.transaction as &dyn ToSql,
-                &blockchaindata.address as &dyn ToSql,
                 node0 as &dyn ToSql,
-                node1  as &dyn ToSql,
+                node1 as &dyn ToSql,
                 &channel.satoshis as &dyn ToSql,
             ],
         )
         .chain_err(|| "failed to insert")?;
 
         println!(
-            "{}: inserted {}-[{}]-{} at block {}",
-            &i, node0, &channel.satoshis, node1, &blockchaindata.block
+            "  {}: inserted {}-[{}]-{} at {}",
+            &i, node0, &channel.satoshis, node1, &channel.short_channel_id
         );
+        i += 1;
+    }
+
+    println!("getting blockchain data");
+    i = 0;
+    let mut q = conn.prepare("SELECT short_channel_id FROM channels WHERE open_block IS NULL")?;
+    let mut rows = q.query(NO_PARAMS)?;
+    while let Some(row) = rows.next()? {
+        let short_channel_id: String = row.get(0)?;
+
+        let blockchaindata = getchannelblockchaindata(&short_channel_id)?;
+        conn.execute(
+            "UPDATE channels SET open_block = ?2, open_transaction = ?3, address = ?4
+            WHERE short_channel_id = ?1",
+            &[
+                &short_channel_id as &dyn ToSql,
+                &blockchaindata.block as &dyn ToSql,
+                &blockchaindata.transaction as &dyn ToSql,
+                &blockchaindata.address as &dyn ToSql,
+            ],
+        )
+        .chain_err(|| "failed to update with blockchain data")?;
+
+        println!(
+            "  {}: updated with blockchain data: {} {} {}",
+            &i, &blockchaindata.block, &blockchaindata.transaction, &blockchaindata.address
+        );
+        i += 1;
+    }
+
+    println!("inspecting channels that may have been closed");
+    i = 0;
+    let mut q = conn.prepare(
+        "SELECT short_channel_id, address FROM channels
+        WHERE last_seen < date('now', '-1 day')",
+    )?;
+    let mut rows = q.query(NO_PARAMS)?;
+    while let Some(row) = rows.next()? {
+        let short_channel_id: String = row.get(0)?;
+        let address: String = row.get(1)?;
+        println!(
+            "  {}: checking {}, address {}",
+            i, short_channel_id, address
+        );
+
+        match getchannelclosedata(address)? {
+            None => println!("  {}: still open.", i),
+            Some(closedata) => {
+                conn.execute(
+                    "UPDATE channels SET close_block = ?2, close_transaction = ?3
+                    WHERE short_channel_id = ?1",
+                    &[
+                        &short_channel_id as &dyn ToSql,
+                        &closedata.block as &dyn ToSql,
+                        &closedata.transaction as &dyn ToSql,
+                    ],
+                )
+                .chain_err(|| "failed to update with blockchain data")?;
+
+                println!("  {}: was closed!", i);
+            }
+        };
         i += 1;
     }
 
@@ -164,21 +246,16 @@ struct ChannelBitcoinData {
     address: String,
 }
 
-fn getchannelblockchaindata(channel: &Channel) -> Result<ChannelBitcoinData> {
+fn getchannelblockchaindata(short_channel_id: &String) -> Result<ChannelBitcoinData> {
     let bitcoind_url = env::var("BITCOIN_URL").chain_err(|| "failed to read BITCOIN_URL")?;
     let bitcoind_user = env::var("BITCOIN_USER").chain_err(|| "failed to read BITCOIN_USER")?;
     let bitcoind_password =
         env::var("BITCOIN_PASSWORD").chain_err(|| "failed to read BITCOIN_PASSWORD")?;
 
-    println!(
-        "fetching channel data from bitcoind for {}",
-        &channel.short_channel_id
-    );
-
     let client =
         jsonrpc::client::Client::new(bitcoind_url, Some(bitcoind_user), Some(bitcoind_password));
 
-    let scid_parts: Vec<&str> = channel.short_channel_id.split("x").collect();
+    let scid_parts: Vec<&str> = short_channel_id.split("x").collect();
     let blockheight: i64 = scid_parts[0].parse().chain_err(|| "failed to parse scid")?;
     let txindex: usize = scid_parts[1].parse().chain_err(|| "failed to parse scid")?;
     let txoutputindex: usize = scid_parts[2].parse().chain_err(|| "failed to parse scid")?;
@@ -208,4 +285,33 @@ fn getchannelblockchaindata(channel: &Channel) -> Result<ChannelBitcoinData> {
         transaction: transactionid.to_string(),
         address: address.to_string(),
     })
+}
+
+struct ChannelCloseData {
+    block: i64,
+    transaction: String,
+}
+
+fn getchannelclosedata(address: String) -> Result<Option<ChannelCloseData>> {
+    let mut w = reqwest::get(
+        format!(
+            "https://api.smartbit.com.au/v1/blockchain/address/{}",
+            address
+        )
+        .as_str(),
+    )
+    .chain_err(|| "smartbit address call failed")?;
+
+    let response: SmartbitResponse = w
+        .json()
+        .chain_err(|| "failed to decode smartbit response")?;
+
+    if response.address.transactions.len() == 2 {
+        Ok(Some(ChannelCloseData {
+            block: response.address.transactions[1].block,
+            transaction: response.address.transactions[1].txid.clone(),
+        }))
+    } else {
+        Ok(None)
+    }
 }
