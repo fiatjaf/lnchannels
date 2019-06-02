@@ -160,7 +160,7 @@ fn run() -> Result<()> {
                 )
                 .chain_err(|| "failed to update with blockchain data")?;
 
-                println!("  {}: was closed!", i);
+                println!("  {}: was closed on block {}", i, &closedata.block);
             }
         };
         i += 1;

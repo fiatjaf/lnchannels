@@ -1,0 +1,9 @@
+<!doctype html>
+
+<meta charset=utf-8>
+<title>lnchannels</title>
+<meta name=description content="Lightning Network channels.">
+
+<div>
+  Hello {{ value }}
+</div>
