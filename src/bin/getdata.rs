@@ -263,9 +263,16 @@ fn getchannelclosedata(address: String) -> Result<Option<ChannelCloseData>> {
         .chain_err(|| "failed to decode smartbit response")?;
 
     if response.address.transactions.len() == 2 {
+        let transactions = response.address.transactions;
+        let closetx = if transactions[0].block > transactions[1].block {
+            &transactions[0]
+        } else {
+            &transactions[1]
+        };
+
         Ok(Some(ChannelCloseData {
-            block: response.address.transactions[1].block,
-            transaction: response.address.transactions[1].txid.clone(),
+            block: closetx.block,
+            transaction: closetx.txid.clone(),
         }))
     } else {
         Ok(None)
