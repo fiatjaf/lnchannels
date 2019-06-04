@@ -6,11 +6,14 @@ extern crate rocket;
 extern crate error_chain;
 extern crate rocket_contrib;
 extern crate rusqlite;
+extern crate serde;
+extern crate serde_json;
 
 use rocket_contrib::serve::StaticFiles;
 use rocket_contrib::templates::tera::Context;
 use rocket_contrib::templates::Template;
 use rusqlite::{Connection, NO_PARAMS};
+use serde::Serialize;
 
 mod errors {
     error_chain! {
@@ -96,13 +99,48 @@ ORDER BY blockgroup
     context.insert("total", &total[1..]);
     context.insert("capacity", &capacity[1..]);
 
-    // nodes with most channels
-
-    // most valuable channels
+    // longest-living channels
+    let mut longestliving = Vec::new();
+    let mut q = conn.prepare(
+        r#"
+SELECT short_channel_id, open_block, close_block, close_block - open_block AS duration FROM (
+  SELECT short_channel_id,
+    open_block,
+    CASE
+      WHEN close_block IS NOT NULL THEN close_block
+      ELSE (SELECT open_block FROM channels ORDER BY open_block DESC LIMIT 1)
+    END AS close_block
+  FROM channels
+) ORDER BY duration DESC LIMIT 100
+    "#,
+    )?;
+    let mut rows = q.query(NO_PARAMS)?;
+    while let Some(row) = rows.next()? {
+        let channel = Channel {
+            short_channel_id: row.get(0)?,
+            open_block: row.get(1)?,
+            close_block: row.get(2)?,
+            duration: row.get(3)?,
+        };
+        longestliving.push(channel);
+    }
+    context.insert("longestliving", &longestliving);
 
     // nodes that open and close more channels
 
     Ok(Template::render("index", &context))
+}
+
+#[derive(Serialize)]
+struct Channel {
+    #[serde(rename = "s")]
+    short_channel_id: String,
+    #[serde(rename = "o")]
+    open_block: i64,
+    #[serde(rename = "c")]
+    close_block: i64,
+    #[serde(rename = "d")]
+    duration: i64,
 }
 
 fn main() {

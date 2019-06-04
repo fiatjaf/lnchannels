@@ -6,8 +6,32 @@
 <link rel=stylesheet href=https://unpkg.com/tachyons@4.10.0/css/tachyons.min.css>
 <link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.css>
 
-<div>
+<div class="pa4">
    <canvas id=open-close></canvas>
+</div>
+<div class="pa4 overflow-auto">
+   <table id=longest-living class="f6 w-100 mw8 center">
+    <thead>
+      <tr class="tr">
+        <th>short_channel_id</th>
+        <th>opened on block</th>
+        <th>duration (blocks)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+<div class="pa4 overflow-auto">
+   <table id=longest-living class="f6 w-100 mw8 center">
+    <thead>
+      <tr class="tr">
+        <th>node</th>
+        <th>historical channels</th>
+        <th>average channel duration</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
@@ -17,5 +41,8 @@ window.openings = {{ openings | safe | json_encode }}
 window.closings = {{ closings | safe | json_encode }}
 window.total = {{ total | safe | json_encode }}
 window.capacity = {{ capacity | safe | json_encode }}
+
+window.longestliving = {{ longestliving | safe | json_encode }}
 </script>
 <script src="/static/charts.js"></script>
+<script src="/static/tables.js"></script>
