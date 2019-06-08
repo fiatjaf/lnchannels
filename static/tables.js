@@ -1,16 +1,21 @@
 /** @format */
 
-var table = document.getElementById('longest-living')
-for (let i = 0; i < window.longestliving.length; i++) {
-  var row = document.createElement('tr')
+writeTable('longest-living', ['s', 'o', 'd'], window.longestliving)
+writeTable('shortest-living', ['s', 'o', 'd'], window.shortestliving)
 
-  let channel = window.longestliving[i]
-  ;['s', 'o', 'd'].forEach(attr => {
-    var td = document.createElement('td')
-    td.textContent = channel[attr]
-    td.className = 'tr'
-    row.appendChild(td)
-  })
+function writeTable(id, keys, data) {
+  var table = document.getElementById(id)
+  for (let i = 0; i < data.length; i++) {
+    var row = document.createElement('tr')
 
-  table.appendChild(row)
+    let datapoint = data[i]
+    keys.forEach(attr => {
+      var td = document.createElement('td')
+      td.textContent = datapoint[attr]
+      td.className = 'tr'
+      row.appendChild(td)
+    })
+
+    table.appendChild(row)
+  }
 }

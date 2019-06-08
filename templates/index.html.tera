@@ -22,7 +22,19 @@
   </table>
 </div>
 <div class="pa4 overflow-auto">
-   <table id=longest-living class="f6 w-100 mw8 center">
+   <table id=shortest-living class="f6 w-100 mw8 center">
+    <thead>
+      <tr class="tr">
+        <th>short_channel_id</th>
+        <th>opened on block</th>
+        <th>duration (blocks)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+<div class="pa4 overflow-auto">
+   <table id=node-history class="f6 w-100 mw8 center">
     <thead>
       <tr class="tr">
         <th>node</th>
@@ -43,6 +55,8 @@ window.total = {{ total | safe | json_encode }}
 window.capacity = {{ capacity | safe | json_encode }}
 
 window.longestliving = {{ longestliving | safe | json_encode }}
+window.shortestliving = {{ shortestliving | safe | json_encode }}
+window.nodehistory = {{ nodehistory | safe | json_encode }}
 </script>
 <script src="/static/charts.js"></script>
 <script src="/static/tables.js"></script>

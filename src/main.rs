@@ -120,7 +120,7 @@ SELECT short_channel_id, open_block, close_block, close_block - open_block AS du
       ELSE ?1
     END AS close_block
   FROM channels
-) ORDER BY duration DESC LIMIT 100
+) ORDER BY duration DESC LIMIT 10
     "#,
     )?;
     let mut rows = q.query(params![last_block])?;
@@ -135,7 +135,31 @@ SELECT short_channel_id, open_block, close_block, close_block - open_block AS du
     }
     context.insert("longestliving", &longestliving);
 
+    // shortest-living channels
+    let mut shortestliving = Vec::new();
+    let mut q = conn.prepare(
+        r#"
+SELECT short_channel_id, open_block, close_block, close_block - open_block AS duration
+FROM channels
+WHERE close_block IS NOT NULL
+ORDER BY duration LIMIT 10
+    "#,
+    )?;
+    let mut rows = q.query(NO_PARAMS)?;
+    while let Some(row) = rows.next()? {
+        let channel = Channel {
+            short_channel_id: row.get(0)?,
+            open_block: row.get(1)?,
+            close_block: row.get(2)?,
+            duration: row.get(3)?,
+        };
+        shortestliving.push(channel);
+    }
+    context.insert("shortestliving", &shortestliving);
+
     // nodes that open and close more channels
+    let mut nodehistory: Vec<i32> = Vec::new();
+    context.insert("nodehistory", &nodehistory);
 
     Ok(Template::render("index", &context))
 }
