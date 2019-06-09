@@ -13,21 +13,20 @@ use docopt::Docopt;
 use rusqlite::types::ToSql;
 use rusqlite::{Connection, NO_PARAMS};
 use serde::Deserialize;
-use serde_json::{Number, Value};
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
-use bitcoin::*;
-use errors::*;
-use lightning::*;
-use smartbit::*;
+use crate::bitcoin::*;
+use crate::errors::*;
+use crate::lightning::*;
+use crate::smartbit::*;
 
 const USAGE: &'static str = "
 getdata
 
 Usage:
-  getdata [--justcheckcloses]
+  getdata [--justcheckcloses] [--justenrich]
 
 Options:
   --justcheckcloses     Skips fetching all lightning channels and upserting them (developer usage only).
@@ -36,6 +35,7 @@ Options:
 #[derive(Deserialize)]
 struct Args {
     flag_justcheckcloses: bool,
+    flag_justenrich: bool,
 }
 
 quick_main! {run}
@@ -53,10 +53,16 @@ fn run() -> Result<()> {
             short_channel_id TEXT PRIMARY KEY,
 
             open_block INTEGER,
+            open_time DATETIME,
             open_transaction TEXT,
+            open_fee INTEGER,
+
             address TEXT,
+
             close_block INTEGER,
+            close_time DATETIME,
             close_transaction TEXT,
+            close_fee INTEGER,
 
             node0 TEXT NOT NULL,
             node1 TEXT NOT NULL,
@@ -70,7 +76,7 @@ fn run() -> Result<()> {
 
     let mut i = 0;
 
-    if !args.flag_justcheckcloses {
+    if !args.flag_justcheckcloses && !args.flag_justenrich {
         let channels = getchannels()?;
         println!("inserting {} channels", channels.len());
 
@@ -113,7 +119,7 @@ fn run() -> Result<()> {
             let blockchaindata = getchannelblockchaindata(&short_channel_id)?;
             conn.execute(
                 "UPDATE channels SET open_block = ?2, open_transaction = ?3, address = ?4
-            WHERE short_channel_id = ?1",
+                WHERE short_channel_id = ?1",
                 &[
                     &short_channel_id as &dyn ToSql,
                     &blockchaindata.block as &dyn ToSql,
@@ -131,39 +137,84 @@ fn run() -> Result<()> {
         }
     }
 
-    println!("inspecting channels that may have been closed");
-    i = 0;
-    let mut q = conn.prepare(
-        "SELECT short_channel_id, address FROM channels
+    if !args.flag_justenrich {
+        println!("inspecting channels that may have been closed");
+        i = 0;
+        let mut q = conn.prepare(
+            "SELECT short_channel_id, address FROM channels
         WHERE close_block IS NULL and last_seen < datetime('now', '-1 day')",
-    )?;
-    let mut rows = q.query(NO_PARAMS)?;
-    while let Some(row) = rows.next()? {
-        let short_channel_id: String = row.get(0)?;
-        let address: String = row.get(1)?;
-        println!(
-            "  {}: checking {}, address {}",
-            i, short_channel_id, address
-        );
+        )?;
+        let mut rows = q.query(NO_PARAMS)?;
+        while let Some(row) = rows.next()? {
+            let short_channel_id: String = row.get(0)?;
+            let address: String = row.get(1)?;
+            println!(
+                "  {}: checking {}, address {}",
+                i, short_channel_id, address
+            );
 
-        match getchannelclosedata(address)? {
-            None => println!("  {}: still open.", i),
-            Some(closedata) => {
-                conn.execute(
-                    "UPDATE channels SET close_block = ?2, close_transaction = ?3
+            match getchannelclosedata(address)? {
+                None => println!("  {}: still open.", i),
+                Some(closedata) => {
+                    conn.execute(
+                        "UPDATE channels SET close_block = ?2, close_transaction = ?3
                     WHERE short_channel_id = ?1",
-                    &[
-                        &short_channel_id as &dyn ToSql,
-                        &closedata.block as &dyn ToSql,
-                        &closedata.transaction as &dyn ToSql,
-                    ],
-                )
-                .chain_err(|| "failed to update with blockchain data")?;
+                        &[
+                            &short_channel_id as &dyn ToSql,
+                            &closedata.block as &dyn ToSql,
+                            &closedata.transaction as &dyn ToSql,
+                        ],
+                    )
+                    .chain_err(|| "failed to update with blockchain data")?;
 
-                println!("  {}: was closed on block {}", i, &closedata.block);
-            }
-        };
-        i += 1;
+                    println!("  {}: was closed on block {}", i, &closedata.block);
+                }
+            };
+            i += 1;
+        }
+    }
+
+    if !args.flag_justcheckcloses {
+        println!("adding more transaction data to closed channels");
+        i = 0;
+        let mut q = conn.prepare(
+            "SELECT short_channel_id, open_block, open_transaction, close_block, close_transaction
+            FROM channels
+            WHERE close_block IS NOT NULL and close_time IS NULL",
+        )?;
+        let mut rows = q.query(NO_PARAMS)?;
+        while let Some(row) = rows.next()? {
+            let short_channel_id: String = row.get(0)?;
+            let open_block: i64 = row.get(1)?;
+            let open_transaction: String = row.get(2)?;
+            let close_block: i64 = row.get(3)?;
+            let close_transaction: String = row.get(4)?;
+            println!("  {}: enriching channel {}", i, short_channel_id,);
+
+            let open_data = gettransactionblockchaindata(open_block, &open_transaction)?;
+            let close_data = gettransactionblockchaindata(close_block, &close_transaction)?;
+
+            conn.execute(
+                "UPDATE channels
+                SET open_time = ?2, open_fee = ?3, close_time = ?4, close_fee = ?5
+                WHERE short_channel_id = ?1",
+                &[
+                    &short_channel_id as &dyn ToSql,
+                    &open_data.time as &dyn ToSql,
+                    &open_data.fee as &dyn ToSql,
+                    &close_data.time as &dyn ToSql,
+                    &close_data.fee as &dyn ToSql,
+                ],
+            )
+            .chain_err(|| "failed to enrich channel data")?;
+
+            println!(
+                "  {}: {} enriched with {}/{}, {}/{}",
+                i, short_channel_id, open_data.time, open_data.fee, close_data.time, close_data.fee
+            );
+
+            i += 1;
+        }
     }
 
     Ok(())
@@ -216,23 +267,9 @@ fn getchannelblockchaindata(short_channel_id: &String) -> Result<ChannelBitcoinD
     let txindex: usize = scid_parts[1].parse().chain_err(|| "failed to parse scid")?;
     let txoutputindex: usize = scid_parts[2].parse().chain_err(|| "failed to parse scid")?;
 
-    let blockhash: String = client
-        .do_rpc("getblockhash", &[Value::Number(Number::from(blockheight))])
-        .chain_err(|| "failed to getblockhash")?;
-
-    let block: Block = client
-        .do_rpc("getblock", &[Value::String(blockhash)])
-        .chain_err(|| "failed to getblock")?;
-
+    let block = readblock(&client, blockheight)?;
     let transactionid = &block.tx[txindex];
-
-    let rawtransaction: String = client
-        .do_rpc("getrawtransaction", &[Value::String(transactionid.clone())])
-        .chain_err(|| "failed to getrawtransaction")?;
-
-    let transaction: DecodedTransaction = client
-        .do_rpc("decoderawtransaction", &[Value::String(rawtransaction)])
-        .chain_err(|| "failed to decoderawtransaction")?;
+    let transaction = readtransaction(&client, transactionid)?;
 
     let address = &transaction.vout[txoutputindex].script_pub_key.addresses[0];
 
@@ -240,6 +277,37 @@ fn getchannelblockchaindata(short_channel_id: &String) -> Result<ChannelBitcoinD
         block: blockheight,
         transaction: transactionid.to_string(),
         address: address.to_string(),
+    })
+}
+
+struct TransactionData {
+    time: i64,
+    fee: i64,
+}
+
+fn gettransactionblockchaindata(blockheight: i64, txid: &String) -> Result<TransactionData> {
+    let bitcoind_url = env::var("BITCOIN_URL").chain_err(|| "failed to read BITCOIN_URL")?;
+    let bitcoind_user = env::var("BITCOIN_USER").chain_err(|| "failed to read BITCOIN_USER")?;
+    let bitcoind_password =
+        env::var("BITCOIN_PASSWORD").chain_err(|| "failed to read BITCOIN_PASSWORD")?;
+
+    let client =
+        jsonrpc::client::Client::new(bitcoind_url, Some(bitcoind_user), Some(bitcoind_password));
+
+    let block = readblock(&client, blockheight)?;
+
+    let transaction = readtransaction(&client, txid)?;
+    let sats_out: i64 = transaction.vout.iter().fold(0, |acc, out| acc + out.sat);
+    let mut sats_in = 0;
+    for input in transaction.vin.iter() {
+        let input_transaction = readtransaction(&client, &input.txid)?;
+        let index = input.vout as usize;
+        sats_in += input_transaction.vout[index].sat;
+    }
+
+    Ok(TransactionData {
+        time: block.time,
+        fee: sats_in - sats_out,
     })
 }
 
@@ -305,27 +373,75 @@ mod lightning {
 }
 
 mod bitcoin {
-    use serde::Deserialize;
+    use crate::errors::*;
+    use serde::{Deserialize, Deserializer};
+    use serde_json::{Number, Value};
+    use std::result::Result as StdResult;
 
     #[derive(Deserialize)]
     pub struct Block {
         pub tx: Vec<String>,
+        pub time: i64,
     }
 
     #[derive(Deserialize)]
     pub struct DecodedTransaction {
         pub vout: Vec<Output>,
+        pub vin: Vec<Input>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Input {
+        pub txid: String,
+        pub vout: i64,
     }
 
     #[derive(Deserialize)]
     pub struct Output {
         #[serde(rename(deserialize = "scriptPubKey"))]
         pub script_pub_key: ScriptPubKey,
+        #[serde(rename(deserialize = "value"), deserialize_with = "btctosat")]
+        pub sat: i64,
     }
 
     #[derive(Deserialize)]
     pub struct ScriptPubKey {
         pub addresses: Vec<String>,
+    }
+
+    pub fn readtransaction(
+        client: &jsonrpc::client::Client,
+        txid: &String,
+    ) -> Result<DecodedTransaction> {
+        let rawtransaction: String = client
+            .do_rpc("getrawtransaction", &[Value::String(txid.clone())])
+            .chain_err(|| "failed to getrawtransaction")?;
+
+        let transaction = client
+            .do_rpc("decoderawtransaction", &[Value::String(rawtransaction)])
+            .chain_err(|| "failed to decoderawtransaction")?;
+
+        Ok(transaction)
+    }
+
+    pub fn readblock(client: &jsonrpc::client::Client, blockheight: i64) -> Result<Block> {
+        let blockhash: String = client
+            .do_rpc("getblockhash", &[Value::Number(Number::from(blockheight))])
+            .chain_err(|| "failed to getblockhash")?;
+
+        let block: Block = client
+            .do_rpc("getblock", &[Value::String(blockhash)])
+            .chain_err(|| "failed to getblock")?;
+
+        Ok(block)
+    }
+
+    fn btctosat<'de, D>(amount: D) -> StdResult<i64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let btc: f64 = Deserialize::deserialize(amount)?;
+        Ok((btc * 100_000_000f64) as i64)
     }
 }
 
