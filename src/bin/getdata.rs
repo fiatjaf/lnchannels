@@ -29,7 +29,8 @@ Usage:
   getdata [--justcheckcloses] [--justenrich]
 
 Options:
-  --justcheckcloses     Skips fetching all lightning channels and upserting them (developer usage only).
+  --justcheckcloses     Skips everything but checking channels closes (developer usage only).
+  --justenrich          Skips everything but fetching time and fee from transactions (developer usage only).
 ";
 
 #[derive(Deserialize)]
@@ -142,7 +143,7 @@ fn run() -> Result<()> {
         i = 0;
         let mut q = conn.prepare(
             "SELECT short_channel_id, address FROM channels
-        WHERE close_block IS NULL and last_seen < datetime('now', '-1 day')",
+            WHERE close_block IS NULL and last_seen < datetime('now', '-1 day')",
         )?;
         let mut rows = q.query(NO_PARAMS)?;
         while let Some(row) = rows.next()? {
@@ -177,42 +178,64 @@ fn run() -> Result<()> {
     if !args.flag_justcheckcloses {
         println!("adding more transaction data to closed channels");
         i = 0;
+
         let mut q = conn.prepare(
-            "SELECT short_channel_id, open_block, open_transaction, close_block, close_transaction
-            FROM channels
-            WHERE close_block IS NOT NULL and close_time IS NULL",
+            "SELECT short_channel_id, open_block, open_transaction FROM channels
+            WHERE open_block IS NOT NULL and open_time IS NULL",
         )?;
         let mut rows = q.query(NO_PARAMS)?;
         while let Some(row) = rows.next()? {
             let short_channel_id: String = row.get(0)?;
             let open_block: i64 = row.get(1)?;
             let open_transaction: String = row.get(2)?;
-            let close_block: i64 = row.get(3)?;
-            let close_transaction: String = row.get(4)?;
-            println!("  {}: enriching channel {}", i, short_channel_id,);
 
+            println!("  {}: enriching channel {}", i, short_channel_id);
             let open_data = gettransactionblockchaindata(open_block, &open_transaction)?;
-            let close_data = gettransactionblockchaindata(close_block, &close_transaction)?;
-
             conn.execute(
                 "UPDATE channels
-                SET open_time = ?2, open_fee = ?3, close_time = ?4, close_fee = ?5
+                SET open_time = ?2, open_fee = ?3
                 WHERE short_channel_id = ?1",
                 &[
                     &short_channel_id as &dyn ToSql,
                     &open_data.time as &dyn ToSql,
                     &open_data.fee as &dyn ToSql,
+                ],
+            )
+            .chain_err(|| "failed to enrich channel data")?;
+            println!(
+                "  {}: {} enriched with {}/{}",
+                i, short_channel_id, open_data.time, open_data.fee
+            );
+            i += 1;
+        }
+
+        let mut q = conn.prepare(
+            "SELECT short_channel_id, close_block, close_transaction FROM channels
+            WHERE close_block IS NOT NULL and close_time IS NULL",
+        )?;
+        let mut rows = q.query(NO_PARAMS)?;
+        while let Some(row) = rows.next()? {
+            let short_channel_id: String = row.get(0)?;
+            let close_block: i64 = row.get(1)?;
+            let close_transaction: String = row.get(2)?;
+
+            println!("  {}: enriching channel {}", i, short_channel_id);
+            let close_data = gettransactionblockchaindata(close_block, &close_transaction)?;
+            conn.execute(
+                "UPDATE channels
+                SET close_time = ?2, close_fee = ?3
+                WHERE short_channel_id = ?1",
+                &[
+                    &short_channel_id as &dyn ToSql,
                     &close_data.time as &dyn ToSql,
                     &close_data.fee as &dyn ToSql,
                 ],
             )
             .chain_err(|| "failed to enrich channel data")?;
-
             println!(
-                "  {}: {} enriched with {}/{}, {}/{}",
-                i, short_channel_id, open_data.time, open_data.fee, close_data.time, close_data.fee
+                "  {}: {} enriched with {}/{}",
+                i, short_channel_id, close_data.time, close_data.fee
             );
-
             i += 1;
         }
     }
@@ -406,6 +429,7 @@ mod bitcoin {
 
     #[derive(Deserialize)]
     pub struct ScriptPubKey {
+        #[serde(default)]
         pub addresses: Vec<String>,
     }
 
