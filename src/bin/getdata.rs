@@ -26,15 +26,17 @@ const USAGE: &'static str = "
 getdata
 
 Usage:
-  getdata [--justcheckcloses] [--justenrich]
+  getdata [--skiplistchannels] [--justcheckcloses] [--justenrich]
 
 Options:
-  --justcheckcloses     Skips everything but checking channels closes (developer usage only).
-  --justenrich          Skips everything but fetching time and fee from transactions (developer usage only).
+  --skiplistchannels      Skips the `listchannels` part and (re-)inserting all channels in the database.
+  --justcheckcloses       Skips everything but checking channels closes (developer usage only).
+  --justenrich            Skips everything but fetching time and fee from transactions (developer usage only).
 ";
 
 #[derive(Deserialize)]
 struct Args {
+    flag_skiplistchannels: bool,
     flag_justcheckcloses: bool,
     flag_justenrich: bool,
 }
@@ -77,7 +79,7 @@ fn run() -> Result<()> {
 
     let mut i = 0;
 
-    if !args.flag_justcheckcloses && !args.flag_justenrich {
+    if !args.flag_justcheckcloses && !args.flag_justenrich && !args.flag_skiplistchannels {
         let channels = getchannels()?;
         println!("inserting {} channels", channels.len());
 
@@ -90,9 +92,9 @@ fn run() -> Result<()> {
 
             conn.execute(
                 "INSERT INTO channels
-                (short_channel_id, node0, node1, satoshis, last_seen)
-            VALUES (?1, ?2, ?3, ?4, datetime('now'))
-            ON CONFLICT (short_channel_id) DO UPDATE SET last_seen = excluded.last_seen",
+                    (short_channel_id, node0, node1, satoshis, last_seen)
+                VALUES (?1, ?2, ?3, ?4, datetime('now'))
+                ON CONFLICT (short_channel_id) DO UPDATE SET last_seen = excluded.last_seen",
                 &[
                     &channel.short_channel_id as &dyn ToSql,
                     node0 as &dyn ToSql,
@@ -108,7 +110,9 @@ fn run() -> Result<()> {
             );
             i += 1;
         }
+    }
 
+    if !args.flag_justcheckcloses && !args.flag_justenrich {
         println!("getting blockchain data");
         i = 0;
         let mut q =
