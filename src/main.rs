@@ -52,6 +52,7 @@ fn index() -> Result<Template> {
         r#"
 SELECT blockgroup, sum(opened) AS opened, sum(closed) AS closed, sum(cap_change) AS cap_change
 FROM (
+    -- initial aggregates
     SELECT ((?1/100)-1)*100 AS blockgroup,
       count(*) AS opened,
       0 AS closed,
@@ -59,6 +60,7 @@ FROM (
     FROM channels
     WHERE open_block < ?1
   UNION ALL
+    -- ongoing opens
     SELECT (open_block/100)*100 AS blockgroup,
       count(open_block) AS opened,
       0 AS closed,
@@ -67,12 +69,13 @@ FROM (
     WHERE open_block >= ?1
     GROUP BY open_block/100
   UNION ALL
+    -- ongoing closes
     SELECT (close_block/100)*100 AS blockgroup,
       0 AS opened,
       count(close_block) AS closed,
       -sum(satoshis) AS cap_change
     FROM channels
-    WHERE close_block IS NOT NULL
+    WHERE close_block IS NOT NULL AND close_block >= ?1
     GROUP BY open_block/100
 ) AS main
 GROUP BY blockgroup
