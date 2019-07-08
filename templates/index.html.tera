@@ -1,11 +1,5 @@
-<!doctype html>
-
-<meta charset=utf-8>
-<title>lnchannels.alhur.es</title>
-<meta name=description content="A compendium of Lightning Network channels useful statistics.">
-<link rel=stylesheet href=https://unpkg.com/tachyons@4.10.0/css/tachyons.min.css>
-<link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.css>
-
+{% extends "base" %}
+{% block body %}
 <div class="pa4">
    <canvas id=open-close></canvas>
 </div>
@@ -18,7 +12,15 @@
         <th>duration (blocks)</th>
       </tr>
     </thead>
-    <tbody></tbody>
+    <tbody>
+    {% for chan in longestliving %}
+      <tr>
+        <td><a href="/channel/{{ chan.s }}">{{ chan.s }}</a></td>
+        <td>{{ chan.o }}</td>
+        <td>{{ chan.d }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
   </table>
 </div>
 <div class="pa4 overflow-auto">
@@ -30,7 +32,15 @@
         <th>duration (blocks)</th>
       </tr>
     </thead>
-    <tbody></tbody>
+    <tbody>
+    {% for chan in longestliving %}
+      <tr>
+        <td><a href="/channel/{{ chan.s }}">{{ chan.s }}</a></td>
+        <td>{{ chan.o }}</td>
+        <td>{{ chan.d }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
   </table>
 </div>
 <div class="pa4 overflow-auto">
@@ -46,17 +56,13 @@
   </table>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
 <script>
 window.blocks = {{ blocks | safe | json_encode }}
 window.openings = {{ openings | safe | json_encode }}
 window.closings = {{ closings | safe | json_encode }}
 window.total = {{ total | safe | json_encode }}
 window.capacity = {{ capacity | safe | json_encode }}
-
-window.longestliving = {{ longestliving | safe | json_encode }}
-window.shortestliving = {{ shortestliving | safe | json_encode }}
-window.nodehistory = {{ nodehistory | safe | json_encode }}
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
 <script src="/static/charts.js"></script>
-<script src="/static/tables.js"></script>
+{% endblock body %}

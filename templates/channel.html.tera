@@ -1,0 +1,61 @@
+{% extends "base" %}
+{% block body %}
+
+<h1>channel {{ channel.short_channel_id }}</h1>
+
+<table>
+  <caption>details</caption>
+  <tr>
+    <th>short_channel_id</th>
+    <td>{{ channel.short_channel_id }}</td>
+  </tr>
+  <tr>
+    <th>capacity</th>
+    <td>{{ channel.satoshis }}</td>
+  </tr>
+  <tr>
+    <th>nodes</th>
+    <td>
+      <table>
+        <tr><td><a href="/node/{{ channel.node0 }}">{{ channel.node0 }}</a></td></tr>
+        <tr><td><a href="/node/{{ channel.node1 }}">{{ channel.node1 }}</a></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <caption>open details</caption>
+  <tr>
+    <th>block</th>
+    <th>transaction</th>
+    <th>time</th>
+    <th>fee paid</th>
+  </tr>
+  <tr>
+    <td><a href="https://www.smartbit.com.au/block/{{ channel.open_block }}">{{ channel.open_block }}</a></td>
+    <td><a href="https://www.smartbit.com.au/tx/{{ channel.open_transaction }}">{{ channel.open_transaction }}</a></td>
+    <td>{{ channel.open_time }}</td>
+    <td>{{ channel.open_fee }}</td>
+  </tr>
+</table>
+
+{% if channel.close_block %}
+  <table>
+    <caption>close details</caption>
+    <tr>
+      <th>block</th>
+      <th>transaction</th>
+      <th>time</th>
+      <th>fee paid</th>
+    </tr>
+    <tr>
+      <td><a href="https://www.smartbit.com.au/block/{{ channel.close_block }}">{{ channel.close_block }}</a></td>
+      <td><a href="https://www.smartbit.com.au/tx/{{ channel.close_transaction }}">{{ channel.close_transaction }}</a></td>
+      <td>{{ channel.close_time }}</td>
+      <td>{{ channel.close_fee }}</td>
+    </tr>
+  </table>
+{% endif %}
+
+{% endblock body %}

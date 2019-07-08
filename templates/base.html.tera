@@ -1,0 +1,20 @@
+<!doctype html>
+
+<meta charset=utf-8>
+<title>lnchannels.alhur.es</title>
+<meta name=description content="A compendium of Lightning Network channels useful statistics.">
+<link rel="stylesheet" href="https://unpkg.com/style.css">
+<link rel="stylesheet" href="https://unpkg.com/top-bar.css">
+<link rel=stylesheet href=https://unpkg.com/tachyons@4.10.0/css/tachyons.min.css>
+<link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.css>
+
+<nav class="top-bar">
+  <a href="/" class="top-bar-title">lnchannels.alhur.es</a>
+
+  <div class="top-bar-right">
+    <a href="https://fiatjaf.alhur.es/" class="top-bar-link">@fiatjaf</a>
+  </div>
+</nav>
+
+{% block body %}
+{% endblock body %}

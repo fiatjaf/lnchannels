@@ -128,7 +128,7 @@ SELECT short_channel_id, open_block, close_block, close_block - open_block AS du
     )?;
     let mut rows = q.query(params![last_block])?;
     while let Some(row) = rows.next()? {
-        let channel = Channel {
+        let channel = CompressedChannel {
             short_channel_id: row.get(0)?,
             open_block: row.get(1)?,
             close_block: row.get(2)?,
@@ -150,7 +150,7 @@ ORDER BY duration LIMIT 10
     )?;
     let mut rows = q.query(NO_PARAMS)?;
     while let Some(row) = rows.next()? {
-        let channel = Channel {
+        let channel = CompressedChannel {
             short_channel_id: row.get(0)?,
             open_block: row.get(1)?,
             close_block: row.get(2)?,
@@ -167,8 +167,100 @@ ORDER BY duration LIMIT 10
     Ok(Template::render("index", &context))
 }
 
+#[get("/node/<pubkey>")]
+fn show_node(pubkey: String) -> Result<Template> {
+    let mut context = Context::new();
+    let conn = Connection::open("channels.db")?;
+
+    context.insert("node", &pubkey);
+
+    let mut channels = Vec::new();
+    let mut q = conn.prepare(
+        r#"
+SELECT
+  short_channel_id,
+  CASE WHEN node0 = ?1 THEN node1 ELSE node0 END AS peer,
+  open_block, open_time,
+  close_block, close_time
+FROM channels
+WHERE node0 = ?1 OR node1 = ?1
+ORDER BY open_block DESC
+    "#,
+    )?;
+    let mut rows = q.query(params![pubkey])?;
+    while let Some(row) = rows.next()? {
+        let channel = NodeChannel {
+            short_channel_id: row.get(0)?,
+            peer: row.get(1)?,
+            open_block: row.get(2)?,
+            open_time: row.get(3)?,
+            close_block: row.get(4).unwrap_or(0),
+            close_time: row.get(5).unwrap_or(0),
+        };
+        channels.push(channel);
+    }
+    context.insert("channels", &channels);
+
+    Ok(Template::render("node", &context))
+}
+
+#[get("/channel/<short_channel_id>")]
+fn show_channel(short_channel_id: String) -> Result<Template> {
+    let mut context = Context::new();
+    let conn = Connection::open("channels.db")?;
+
+    let channel = conn.query_row(
+        "SELECT
+            open_block, open_fee, open_transaction, open_time, 
+            close_block, close_fee, close_transaction, close_time,
+            address, node0, node1, satoshis, last_seen,
+            short_channel_id
+        FROM channels WHERE short_channel_id = ?1",
+        params![short_channel_id],
+        |row| {
+            Ok(FullChannel {
+                open_block: row.get(0)?,
+                open_fee: row.get(1)?,
+                open_transaction: row.get(2)?,
+                open_time: row.get(3)?,
+                close_block: row.get(4).unwrap_or(0),
+                close_fee: row.get(5).unwrap_or(0),
+                close_transaction: row.get(6).unwrap_or(String::from("")),
+                close_time: row.get(7).unwrap_or(0),
+                address: row.get(8)?,
+                node0: row.get(9)?,
+                node1: row.get(10)?,
+                satoshis: row.get(11)?,
+                // last_seen: row.get(12)?,
+                short_channel_id: row.get(13)?,
+            })
+        },
+    )?;
+    context.insert("channel", &channel);
+
+    Ok(Template::render("channel", &context))
+}
+
 #[derive(Serialize)]
-struct Channel {
+struct FullChannel {
+    short_channel_id: String,
+    open_block: i64,
+    open_fee: i64,
+    open_time: i64,
+    open_transaction: String,
+    close_block: i64,
+    close_fee: i64,
+    close_time: i64,
+    close_transaction: String,
+    address: String,
+    node0: String,
+    node1: String,
+    satoshis: i64,
+    // last_seen: i64,
+}
+
+#[derive(Serialize)]
+struct CompressedChannel {
     #[serde(rename = "s")]
     short_channel_id: String,
     #[serde(rename = "o")]
@@ -179,10 +271,20 @@ struct Channel {
     duration: i64,
 }
 
+#[derive(Serialize)]
+struct NodeChannel {
+    peer: String,
+    short_channel_id: String,
+    open_block: i64,
+    open_time: i64,
+    close_block: i64,
+    close_time: i64,
+}
+
 fn main() {
     rocket::ignite()
         .attach(Template::fairing())
-        .mount("/", routes![index])
+        .mount("/", routes![index, show_channel, show_node])
         .mount("/static", StaticFiles::from("static"))
         .launch();
 }
