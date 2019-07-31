@@ -13,7 +13,6 @@ use docopt::Docopt;
 use rusqlite::types::ToSql;
 use rusqlite::{Connection, NO_PARAMS};
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
@@ -26,10 +25,11 @@ const USAGE: &'static str = "
 getdata
 
 Usage:
-  getdata [--skiplistchannels] [--justcheckcloses] [--justenrich]
+  getdata [--skiplistchannels] [--justcheckcloses] [--justenrich] [--justupdatealiases]
 
 Options:
   --skiplistchannels      Skips the `listchannels` part and (re-)inserting all channels in the database.
+  --justupdatealiases     Skips everything but updating node aliases.
   --justcheckcloses       Skips everything but checking channels closes (developer usage only).
   --justenrich            Skips everything but fetching time and fee from transactions (developer usage only).
 ";
@@ -37,6 +37,7 @@ Options:
 #[derive(Deserialize)]
 struct Args {
     flag_skiplistchannels: bool,
+    flag_justupdatealiases: bool,
     flag_justcheckcloses: bool,
     flag_justenrich: bool,
 }
@@ -77,9 +78,23 @@ fn run() -> Result<()> {
     )
     .chain_err(|| "failed to create table")?;
 
-    let mut i = 0;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS nodealiases (
+            pubkey TEXT NOT NULL,
+            alias TEXT NOT NULL,
+            first_seen DATETIME NOT NULL,
+            last_seen DATETIME NOT NULL
+        )",
+        NO_PARAMS,
+    )
+    .chain_err(|| "failed to create table")?;
 
-    if !args.flag_justcheckcloses && !args.flag_justenrich && !args.flag_skiplistchannels {
+    let mut i = 0;
+    if !args.flag_justcheckcloses
+        && !args.flag_justenrich
+        && !args.flag_justupdatealiases
+        && !args.flag_skiplistchannels
+    {
         let channels = getchannels()?;
         println!("inserting {} channels", channels.len());
 
@@ -113,6 +128,54 @@ fn run() -> Result<()> {
     }
 
     if !args.flag_justcheckcloses && !args.flag_justenrich {
+        let nodes = getnodes()?;
+        println!("inserting {} aliases", nodes.len());
+
+        for node in nodes.iter() {
+            // query current name for node
+            let last_seen: i64 = conn
+                .query_row_and_then(
+                    "SELECT last_seen FROM (
+                        SELECT last_seen, pubkey, alias
+                        FROM nodealiases
+                        WHERE pubkey = ?1
+                        ORDER BY last_seen DESC
+                        LIMIT 1
+                    ) WHERE alias = ?2
+                    UNION ALL SELECT 0",
+                    &[&node.nodeid as &dyn ToSql, &node.alias as &dyn ToSql],
+                    |row| row.get(0),
+                )
+                .chain_err(|| "failed to query existing alias")?;
+
+            // if the current name is different, insert
+            if last_seen == 0 {
+                conn.execute(
+                    "INSERT INTO nodealiases (pubkey, alias, first_seen, last_seen)
+                    VALUES (?1, ?2, datetime('now'), datetime('now'))",
+                    &[&node.nodeid as &dyn ToSql, &node.alias as &dyn ToSql],
+                )
+                .chain_err(|| "failed to insert")?;
+
+                println!("  {}: inserted {} {}", &i, &node.nodeid, &node.alias);
+            } else {
+                // otherwise update last_seen
+                conn.execute(
+                    "UPDATE nodealiases
+                    SET last_seen = datetime('now')
+                    WHERE last_seen = ?1 AND pubkey = ?2",
+                    &[&last_seen as &dyn ToSql, &node.nodeid as &dyn ToSql],
+                )
+                .chain_err(|| "failed to insert")?;
+
+                println!("  {}: updated {} {}", &i, &node.nodeid, &node.alias);
+            };
+
+            i += 1;
+        }
+    }
+
+    if !args.flag_justcheckcloses && !args.flag_justenrich && !args.flag_justupdatealiases {
         println!("getting blockchain data");
         i = 0;
         let mut q =
@@ -142,7 +205,7 @@ fn run() -> Result<()> {
         }
     }
 
-    if !args.flag_justenrich {
+    if !args.flag_justenrich && !args.flag_justupdatealiases {
         println!("inspecting channels that may have been closed");
         i = 0;
         let mut q = conn.prepare(
@@ -179,7 +242,7 @@ fn run() -> Result<()> {
         }
     }
 
-    if !args.flag_justcheckcloses {
+    if !args.flag_justcheckcloses && !args.flag_justupdatealiases {
         println!("adding more transaction data to closed channels");
         i = 0;
 
@@ -259,8 +322,6 @@ fn getchannels() -> Result<Vec<Channel>> {
         .timeout(Duration::from_secs(120))
         .build()
         .chain_err(|| "failed to make spark client")?;
-    let mut call = HashMap::new();
-    call.insert("method", "listchannels");
 
     let mut w = client
         .post(&spark_url)
@@ -272,6 +333,31 @@ fn getchannels() -> Result<Vec<Channel>> {
     let listchannels: ListChannels = w.json().chain_err(|| "failed to decode listchannels")?;
 
     Ok(listchannels.channels)
+}
+
+fn getnodes() -> Result<Vec<Node>> {
+    let mut spark_url = env::var("SPARK_URL").chain_err(|| "failed to read SPARK_URL")?;
+    let spark_token = env::var("SPARK_TOKEN").chain_err(|| "failed to read SPARK_TOKEN")?;
+
+    println!("fetching nodes from {}", &spark_url);
+
+    spark_url.push_str("/rpc");
+    let client = reqwest::Client::builder()
+        .gzip(true)
+        .timeout(Duration::from_secs(120))
+        .build()
+        .chain_err(|| "failed to make spark client")?;
+
+    let mut w = client
+        .post(&spark_url)
+        .header("X-Access", spark_token)
+        .body(r#"{"method": "listnodes"}"#)
+        .send()
+        .chain_err(|| "listnodes call failed")?;
+
+    let listnodes: ListNodes = w.json().chain_err(|| "failed to decode listnodes")?;
+
+    Ok(listnodes.nodes)
 }
 
 struct ChannelBitcoinData {
@@ -397,6 +483,18 @@ mod lightning {
         pub destination: String,
         pub short_channel_id: String,
         pub satoshis: i64,
+    }
+
+    #[derive(Deserialize)]
+    pub struct ListNodes {
+        pub nodes: Vec<Node>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Node {
+        pub nodeid: String,
+        #[serde(default)]
+        pub alias: String,
     }
 }
 
