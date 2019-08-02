@@ -131,9 +131,10 @@ fn run() -> Result<()> {
         let nodes = getnodes()?;
         println!("inserting {} aliases", nodes.len());
 
+        i = 0;
         for node in nodes.iter() {
             // query current name for node
-            let last_seen: i64 = conn
+            let last_seen: String = conn
                 .query_row_and_then(
                     "SELECT last_seen FROM (
                         SELECT last_seen, pubkey, alias
@@ -142,14 +143,14 @@ fn run() -> Result<()> {
                         ORDER BY last_seen DESC
                         LIMIT 1
                     ) WHERE alias = ?2
-                    UNION ALL SELECT 0",
+                    UNION ALL SELECT ''",
                     &[&node.nodeid as &dyn ToSql, &node.alias as &dyn ToSql],
                     |row| row.get(0),
                 )
                 .chain_err(|| "failed to query existing alias")?;
 
             // if the current name is different, insert
-            if last_seen == 0 {
+            if last_seen == "" {
                 conn.execute(
                     "INSERT INTO nodealiases (pubkey, alias, first_seen, last_seen)
                     VALUES (?1, ?2, datetime('now'), datetime('now'))",
@@ -166,7 +167,7 @@ fn run() -> Result<()> {
                     WHERE last_seen = ?1 AND pubkey = ?2",
                     &[&last_seen as &dyn ToSql, &node.nodeid as &dyn ToSql],
                 )
-                .chain_err(|| "failed to insert")?;
+                .chain_err(|| "failed to update")?;
 
                 println!("  {}: updated {} {}", &i, &node.nodeid, &node.alias);
             };
