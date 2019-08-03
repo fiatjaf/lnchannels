@@ -115,15 +115,16 @@ ORDER BY blockgroup
     let mut longestliving = Vec::new();
     let mut q = conn.prepare(
         r#"
-SELECT short_channel_id, open_block, close_block, close_block - open_block AS duration FROM (
+SELECT short_channel_id, open_block, close_block, close_block - open_block AS duration, closed FROM (
   SELECT short_channel_id,
     open_block,
     CASE
       WHEN close_block IS NOT NULL THEN close_block
       ELSE ?1
-    END AS close_block
+    END AS close_block,
+    (close_block IS NOT NULL) AS closed
   FROM channels
-) ORDER BY duration DESC LIMIT 10
+)x ORDER BY duration DESC LIMIT 10
     "#,
     )?;
     let mut rows = q.query(params![last_block])?;
@@ -133,36 +134,55 @@ SELECT short_channel_id, open_block, close_block, close_block - open_block AS du
             open_block: row.get(1)?,
             close_block: row.get(2)?,
             duration: row.get(3)?,
+            closed: row.get(4)?,
         };
         longestliving.push(channel);
     }
     context.insert("longestliving", &longestliving);
 
-    // shortest-living channels
-    let mut shortestliving = Vec::new();
+    // nodes that open and close more channels
+    let mut mostactivity = Vec::new();
     let mut q = conn.prepare(
         r#"
-SELECT short_channel_id, open_block, close_block, close_block - open_block AS duration
-FROM channels
-WHERE close_block IS NOT NULL
-ORDER BY duration LIMIT 10
+SELECT
+  id,
+  historical_total,
+  historical_total - closed_already AS open_now,
+  avg_duration
+FROM (
+  SELECT
+    id,
+    count(*) AS historical_total,
+    count(close_block) AS closed_already,
+    avg(CASE
+      WHEN close_block IS NOT NULL THEN close_block
+      ELSE ?1
+    END - open_block) AS avg_duration
+  FROM (
+    SELECT node0 AS id, *
+    FROM channels
+  UNION ALL
+    SELECT node1 AS id, *
+    FROM channels
+  )x
+  GROUP BY id
+)y
+GROUP BY id
+ORDER BY avg_duration DESC
+LIMIT 10
     "#,
     )?;
-    let mut rows = q.query(NO_PARAMS)?;
+    let mut rows = q.query(params![last_block])?;
     while let Some(row) = rows.next()? {
-        let channel = CompressedChannel {
-            short_channel_id: row.get(0)?,
-            open_block: row.get(1)?,
-            close_block: row.get(2)?,
-            duration: row.get(3)?,
+        let node = NodeActivity {
+            id: row.get(0)?,
+            historical_total: row.get(1)?,
+            open_now: row.get(2)?,
+            avg_duration: row.get(3)?,
         };
-        shortestliving.push(channel);
+        mostactivity.push(node);
     }
-    context.insert("shortestliving", &shortestliving);
-
-    // nodes that open and close more channels
-    let mut nodehistory: Vec<i32> = Vec::new();
-    context.insert("nodehistory", &nodehistory);
+    context.insert("mostactivity", &mostactivity);
 
     Ok(Template::render("index", &context))
 }
@@ -174,6 +194,25 @@ fn show_node(pubkey: String) -> Result<Template> {
 
     context.insert("node", &pubkey);
 
+    let mut aliases = Vec::new();
+    let mut q = conn.prepare(
+        r#"
+SELECT last_seen, alias
+FROM nodealiases
+WHERE pubkey = ?1
+ORDER BY first_seen DESC
+    "#,
+    )?;
+    let mut rows = q.query(params![pubkey])?;
+    while let Some(row) = rows.next()? {
+        let alias = NodeAlias {
+            last_seen: row.get(0)?,
+            alias: row.get(1)?,
+        };
+        aliases.push(alias);
+    }
+    context.insert("aliases", &aliases);
+
     let mut channels = Vec::new();
     let mut q = conn.prepare(
         r#"
@@ -181,7 +220,8 @@ SELECT
   short_channel_id,
   CASE WHEN node0 = ?1 THEN node1 ELSE node0 END AS peer,
   open_block, open_time,
-  close_block, close_time
+  close_block, close_time,
+  satoshis
 FROM channels
 WHERE node0 = ?1 OR node1 = ?1
 ORDER BY open_block DESC
@@ -192,10 +232,11 @@ ORDER BY open_block DESC
         let channel = NodeChannel {
             short_channel_id: row.get(0)?,
             peer: row.get(1)?,
-            open_block: row.get(2)?,
-            open_time: row.get(3)?,
+            open_block: row.get(2).unwrap_or(0),
+            open_time: row.get(3).unwrap_or(0),
             close_block: row.get(4).unwrap_or(0),
             close_time: row.get(5).unwrap_or(0),
+            satoshis: row.get(6)?,
         };
         channels.push(channel);
     }
@@ -261,14 +302,17 @@ struct FullChannel {
 
 #[derive(Serialize)]
 struct CompressedChannel {
-    #[serde(rename = "s")]
     short_channel_id: String,
-    #[serde(rename = "o")]
     open_block: i64,
-    #[serde(rename = "c")]
     close_block: i64,
-    #[serde(rename = "d")]
     duration: i64,
+    closed: bool,
+}
+
+#[derive(Serialize)]
+struct NodeAlias {
+    alias: String,
+    last_seen: String,
 }
 
 #[derive(Serialize)]
@@ -279,6 +323,15 @@ struct NodeChannel {
     open_time: i64,
     close_block: i64,
     close_time: i64,
+    satoshis: i64,
+}
+
+#[derive(Serialize)]
+struct NodeActivity {
+    id: String,
+    open_now: i64,
+    historical_total: i64,
+    avg_duration: f64,
 }
 
 fn main() {

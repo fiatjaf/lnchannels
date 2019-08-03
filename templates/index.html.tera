@@ -4,6 +4,28 @@
    <canvas id=open-close></canvas>
 </div>
 <div class="pa4 overflow-auto">
+   <table id=node-history class="f6 w-100 mw8 center">
+    <thead>
+      <tr class="tr">
+        <th>node</th>
+        <th>open channels now</th>
+        <th>historical channels</th>
+        <th>duration</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for node in mostactivity %}
+      <tr>
+        <td><a href="/node/{{ node.id }}">{{ node.id }}</a></td>
+        <td>{{ node.open_now }}</td>
+        <td>{{ node.historical_total }}</td>
+        <td>{{ node.avg_duration }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="pa4 overflow-auto">
    <table id=longest-living class="f6 w-100 mw8 center">
     <thead>
       <tr class="tr">
@@ -14,45 +36,13 @@
     </thead>
     <tbody>
     {% for chan in longestliving %}
-      <tr>
-        <td><a href="/channel/{{ chan.s }}">{{ chan.s }}</a></td>
-        <td>{{ chan.o }}</td>
-        <td>{{ chan.d }}</td>
+      <tr class="{% if chan.closed %}closed{% endif %}">
+        <td><a href="/channel/{{ chan.short_channel_id }}">{{ chan.short_channel_id }}</a></td>
+        <td>{{ chan.open_block }}</td>
+        <td>{{ chan.duration }}</td>
       </tr>
     {% endfor %}
     </tbody>
-  </table>
-</div>
-<div class="pa4 overflow-auto">
-   <table id=shortest-living class="f6 w-100 mw8 center">
-    <thead>
-      <tr class="tr">
-        <th>short_channel_id</th>
-        <th>opened on block</th>
-        <th>duration (blocks)</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for chan in longestliving %}
-      <tr>
-        <td><a href="/channel/{{ chan.s }}">{{ chan.s }}</a></td>
-        <td>{{ chan.o }}</td>
-        <td>{{ chan.d }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-<div class="pa4 overflow-auto">
-   <table id=node-history class="f6 w-100 mw8 center">
-    <thead>
-      <tr class="tr">
-        <th>node</th>
-        <th>historical channels</th>
-        <th>average channel duration</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
   </table>
 </div>
 

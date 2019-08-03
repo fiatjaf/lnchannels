@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="https://unpkg.com/top-bar.css">
 <link rel=stylesheet href=https://unpkg.com/tachyons@4.10.0/css/tachyons.min.css>
 <link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.css>
+<style>
+tr.closed { background: red; }
+</style>
 
 <nav class="top-bar">
   <a href="/" class="top-bar-title">lnchannels.alhur.es</a>
