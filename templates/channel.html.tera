@@ -1,6 +1,5 @@
 {% extends "base" %}
 {% block body %}
-
 <h1>channel {{ channel.short_channel_id }}</h1>
 
 <table>
@@ -10,7 +9,7 @@
     <td>{{ channel.short_channel_id }}</td>
   </tr>
   <tr>
-    <th>capacity</th>
+    <th>satoshis</th>
     <td>{{ channel.satoshis }}</td>
   </tr>
   <tr>

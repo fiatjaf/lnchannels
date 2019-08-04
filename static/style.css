@@ -1,0 +1,10 @@
+:root {
+  --red: #fe8888;
+  --green: #43c160;
+  --blue: #7cb5ec;
+  --gold: #ffd85a;
+}
+
+main { margin: 0 1rem; }
+tr.closed { background: var(--red) !important; }
+td { font-family: monospace; font-size: 0.9em; }

@@ -1,51 +1,57 @@
 {% extends "base" %}
 {% block body %}
-node {{ node }}
+<h1>node {{ node }}</h1>
 
-<div class="pa4">
-   <canvas id=node-channels-history></canvas>
+<div>
+  {% if aliases %}
+  <table>
+    <caption>node names</caption>
+    <thead>
+      <tr>
+        <th>alias</th>
+        <th>last seen</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for alias in aliases %}
+      <tr>
+        <td>{{ alias.last_seen }}</td>
+        <td>{{ alias.alias }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
 </div>
 
-<table>
-  <caption>node names</caption>
-  <thead>
-    <tr>
-      <th>alias</th>
-      <th>last seen</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for alias in aliases %}
-    <tr>
-      <td>{{ alias.last_seen }}</td>
-      <td>{{ alias.alias }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="pa4">
+   <div id=node-channels-history />
+</div>
 
-<table class=node-channels-history>
-  <caption>all channels</caption>
-  <thead>
-    <tr>
-      <th>with</th>
-      <th>id</th>
-      <th>open</th>
-      <th>close</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for channel in channels %}
-    <tr class="{% if channel.close_block > 0 %}closed{% endif %}">
-      <td><a href="/node/{{ channel.peer }}">{{ channel.peer }}</a></td>
-      <td><a href="/channel/{{ channel.short_channel_id }}">{{ channel.short_channel_id }}</a></td>
-      <td>{{ channel.satoshis }}</td>
-      <td>{{ channel.open_block }}</td>
-      <td>{% if channel.close_block > 0 %}{{ channel.close_block }}{% endif %}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div>
+  <table class=node-channels-history>
+    <caption>all channels</caption>
+    <thead>
+      <tr>
+        <th>with</th>
+        <th>id</th>
+        <th>satoshis</th>
+        <th>open</th>
+        <th>close</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for channel in channels %}
+      <tr class="{% if channel.close_block > 0 %}closed{% endif %}">
+        <td><a href="/node/{{ channel.peer_id }}">{{ channel.peer_name }}</a></td>
+        <td><a href="/channel/{{ channel.short_channel_id }}">{{ channel.short_channel_id }}</a></td>
+        <td>{{ channel.satoshis }}</td>
+        <td>{{ channel.open_block }}</td>
+        <td>{% if channel.close_block > 0 %}{{ channel.close_block }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
 <script src="/static/charts.js"></script>

@@ -115,26 +115,41 @@ ORDER BY blockgroup
     let mut longestliving = Vec::new();
     let mut q = conn.prepare(
         r#"
-SELECT short_channel_id, open_block, close_block, close_block - open_block AS duration, closed FROM (
+SELECT
+  short_channel_id,
+  open_block,
+  close_block,
+  close_block - open_block AS duration,
+  closed,
+  node0 AS id0,
+  coalesce((SELECT alias FROM nodealiases WHERE pubkey = node0 ORDER BY last_seen DESC LIMIT 1), '') AS name0,
+  node0 AS id1,
+  coalesce((SELECT alias FROM nodealiases WHERE pubkey = node1 ORDER BY last_seen DESC LIMIT 1), '') AS name1
+FROM (
   SELECT short_channel_id,
     open_block,
     CASE
       WHEN close_block IS NOT NULL THEN close_block
       ELSE ?1
     END AS close_block,
-    (close_block IS NOT NULL) AS closed
+    (close_block IS NOT NULL) AS closed,
+    node0, node1
   FROM channels
-)x ORDER BY duration DESC LIMIT 10
+)x ORDER BY duration DESC LIMIT 50
     "#,
     )?;
     let mut rows = q.query(params![last_block])?;
     while let Some(row) = rows.next()? {
-        let channel = CompressedChannel {
+        let channel = ChannelEntry {
             short_channel_id: row.get(0)?,
             open_block: row.get(1)?,
             close_block: row.get(2)?,
             duration: row.get(3)?,
             closed: row.get(4)?,
+            id0: row.get(5)?,
+            name0: row.get(6)?,
+            id1: row.get(7)?,
+            name1: row.get(8)?,
         };
         longestliving.push(channel);
     }
@@ -146,6 +161,7 @@ SELECT short_channel_id, open_block, close_block, close_block - open_block AS du
         r#"
 SELECT
   id,
+  coalesce((SELECT alias FROM nodealiases WHERE pubkey = id ORDER BY last_seen DESC LIMIT 1), '') AS name,
   historical_total,
   historical_total - closed_already AS open_now,
   avg_duration
@@ -168,17 +184,18 @@ FROM (
   GROUP BY id
 )y
 GROUP BY id
-ORDER BY avg_duration DESC
-LIMIT 10
+ORDER BY historical_total DESC
+LIMIT 50
     "#,
     )?;
     let mut rows = q.query(params![last_block])?;
     while let Some(row) = rows.next()? {
         let node = NodeActivity {
             id: row.get(0)?,
-            historical_total: row.get(1)?,
-            open_now: row.get(2)?,
-            avg_duration: row.get(3)?,
+            name: row.get(1)?,
+            historical_total: row.get(2)?,
+            open_now: row.get(3)?,
+            avg_duration: row.get(4)?,
         };
         mostactivity.push(node);
     }
@@ -218,7 +235,8 @@ ORDER BY first_seen DESC
         r#"
 SELECT
   short_channel_id,
-  CASE WHEN node0 = ?1 THEN node1 ELSE node0 END AS peer,
+  CASE WHEN node0 = ?1 THEN node1 ELSE node0 END AS peer_id,
+  coalesce((SELECT alias FROM nodealiases WHERE pubkey = (CASE WHEN node0 = ?1 THEN node1 ELSE node0 END) ORDER BY last_seen DESC LIMIT 1), '') AS peer_name,
   open_block, open_time,
   close_block, close_time,
   satoshis
@@ -231,12 +249,13 @@ ORDER BY open_block DESC
     while let Some(row) = rows.next()? {
         let channel = NodeChannel {
             short_channel_id: row.get(0)?,
-            peer: row.get(1)?,
-            open_block: row.get(2).unwrap_or(0),
-            open_time: row.get(3).unwrap_or(0),
-            close_block: row.get(4).unwrap_or(0),
-            close_time: row.get(5).unwrap_or(0),
-            satoshis: row.get(6)?,
+            peer_id: row.get(1)?,
+            peer_name: row.get(2)?,
+            open_block: row.get(3).unwrap_or(0),
+            open_time: row.get(4).unwrap_or("".to_string()),
+            close_block: row.get(5).unwrap_or(0),
+            close_time: row.get(6).unwrap_or("".to_string()),
+            satoshis: row.get(7)?,
         };
         channels.push(channel);
     }
@@ -301,7 +320,11 @@ struct FullChannel {
 }
 
 #[derive(Serialize)]
-struct CompressedChannel {
+struct ChannelEntry {
+    id0: String,
+    name0: String,
+    id1: String,
+    name1: String,
     short_channel_id: String,
     open_block: i64,
     close_block: i64,
@@ -317,18 +340,20 @@ struct NodeAlias {
 
 #[derive(Serialize)]
 struct NodeChannel {
-    peer: String,
+    peer_id: String,
+    peer_name: String,
     short_channel_id: String,
     open_block: i64,
-    open_time: i64,
+    open_time: String,
     close_block: i64,
-    close_time: i64,
+    close_time: String,
     satoshis: i64,
 }
 
 #[derive(Serialize)]
 struct NodeActivity {
     id: String,
+    name: String,
     open_now: i64,
     historical_total: i64,
     avg_duration: f64,

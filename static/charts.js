@@ -1,127 +1,57 @@
 /** @format */
 
-var Chart = window.Chart
-
-var chartColors = {
-  red: 'rgb(255, 99, 132)',
-  orange: 'rgb(255, 159, 64)',
-  yellow: 'rgb(255, 205, 86)',
-  green: 'rgb(75, 192, 192)',
-  blue: 'rgb(54, 162, 235)',
-  purple: 'rgba(153, 102, 255, 0.5)',
-  grey: 'rgba(201, 203, 207, 0.4)'
+var Highcharts = window.Highcharts
+var plotOptions = {
+  series: {
+    turboThreshold: 1,
+    marker: {enabled: false}
+  }
 }
 
 // -- index.html
 var openClose = document.getElementById('open-close')
 if (openClose) {
-  new Chart(openClose, {
-    type: 'line',
-    data: {
-      labels: window.blocks,
-      datasets: [
-        {
-          label: 'Opened channels',
-          backgroundColor: chartColors.blue,
-          borderColor: chartColors.blue,
-          data: window.openings,
-          fill: false,
-          pointRadius: 1,
-          yAxisID: 'change'
-        },
-        {
-          label: 'Closed channels',
-          backgroundColor: chartColors.red,
-          borderColor: chartColors.red,
-          data: window.closings,
-          fill: false,
-          pointRadius: 1,
-          yAxisID: 'change'
-        },
-        {
-          label: 'Total channels',
-          backgroundColor: chartColors.purple,
-          borderColor: chartColors.purple,
-          data: window.total,
-          fill: true,
-          pointRadius: 0,
-          yAxisID: 'acc'
-        },
-        {
-          label: 'Total capacity (bitcoin)',
-          backgroundColor: chartColors.grey,
-          borderColor: chartColors.grey,
-          data: window.capacity,
-          fill: true,
-          pointRadius: 0,
-          yAxisID: 'cap'
-        }
-      ]
+  Highcharts.chart(openClose, {
+    title: {text: 'Channel variation'},
+    xAxis: {
+      categories: window.blocks.map(b => b.toString().slice(0, -2) + '__')
     },
-    options: {
-      responsive: true,
-      title: {
-        display: true,
-        text: 'Channel variation'
+    yAxis: [{visible: false}, {visible: false}, {visible: false}],
+    series: [
+      {
+        name: 'capacity (btc)',
+        type: 'area',
+        data: window.capacity,
+        step: 'left',
+        yAxis: 2,
+        color: 'var(--gold)'
       },
-      tooltips: {
-        mode: 'index',
-        intersect: false
+      {
+        name: 'total',
+        type: 'area',
+        data: window.total,
+        step: 'left',
+        yAxis: 1,
+        color: 'var(--blue)'
       },
-      hover: {
-        mode: 'nearest',
-        intersect: true
+      {
+        name: 'openings',
+        type: 'column',
+        data: window.openings,
+        yAxis: 0,
+        color: 'var(--green)',
+        borderWidth: 1
       },
-      scales: {
-        xAxes: [
-          {
-            display: true,
-            scaleLabel: {
-              display: true,
-              labelString: 'Block number (every 100)'
-            }
-          }
-        ],
-        yAxes: [
-          {
-            id: 'acc',
-            type: 'linear',
-            display: true,
-            position: 'right',
-            scaleLabel: {
-              display: true,
-              labelString: 'Total channels'
-            }
-          },
-          {
-            id: 'cap',
-            type: 'linear',
-            display: false
-          },
-          {
-            id: 'change',
-            type: 'logarithmic',
-            display: true,
-            position: 'left',
-            scaleLabel: {
-              display: true,
-              labelString: 'Channel open/closes'
-            },
-            ticks: {
-              callback: function(value, index, values) {
-                if (
-                  index === 0 ||
-                  index === values.length - 1 ||
-                  value.toString()[0] === '1'
-                ) {
-                  return '' + value
-                }
-              }
-            }
-          }
-        ]
+      {
+        name: 'closings',
+        type: 'column',
+        data: window.closings,
+        yAxis: 0,
+        color: 'var(--red)',
+        borderWidth: 1
       }
-    }
+    ],
+    plotOptions
   })
 }
 
@@ -135,7 +65,7 @@ if (nodeHistory) {
   var close_sats = {}
 
   var rows = document.querySelectorAll('table.node-channels-history tbody tr')
-  for (var i = 0; i < rows.length; i++) {
+  for (var i = rows.length - 1; i >= 0; i--) {
     var row = rows[i]
     var satoshis = parseFloat(row.children[2].innerHTML)
     var opened_at = parseInt(row.children[3].innerHTML)
@@ -162,127 +92,62 @@ if (nodeHistory) {
   var total = []
   var capacity = []
 
-  i = 0
-  for (var b in blockmap) {
-    openings.push(opens[b])
-    closings.push(closes[b])
-    total.push(
-      (total.length > 0 ? total[i - 1] : 0) + (opens[b] || 0) - (closes[b] || 0)
-    )
-    capacity.push(
-      (capacity.length > 0 ? capacity[i - 1] : 0) +
+  for (i = 0; i < blocks.length; i++) {
+    var b = blocks[i]
+    var x = parseInt(b)
+    openings.push([x, opens[b] || 0])
+    closings.push([x, closes[b] || 0])
+    total.push([
+      x,
+      (total.length > 0 ? total[i - 1][1] : 0) +
+        (opens[b] || 0) -
+        (closes[b] || 0)
+    ])
+    capacity.push([
+      x,
+      (capacity.length > 0 ? capacity[i - 1][1] : 0) +
         (open_sats[b] || 0) -
         (close_sats[b] || 0)
-    )
-    i++
+    ])
   }
 
-  new Chart(nodeHistory, {
-    type: 'line',
-    data: {
-      labels: blocks,
-      datasets: [
-        {
-          label: 'Opened channels',
-          backgroundColor: chartColors.blue,
-          borderColor: chartColors.blue,
-          data: openings,
-          fill: false,
-          pointRadius: 1,
-          yAxisID: 'change'
-        },
-        {
-          label: 'Closed channels',
-          backgroundColor: chartColors.red,
-          borderColor: chartColors.red,
-          data: closings,
-          fill: false,
-          pointRadius: 1,
-          yAxisID: 'change'
-        },
-        {
-          label: 'Total channels',
-          backgroundColor: chartColors.purple,
-          borderColor: chartColors.purple,
-          data: total,
-          fill: true,
-          pointRadius: 0,
-          yAxisID: 'acc'
-        },
-        {
-          label: 'Total capacity (bitcoin)',
-          backgroundColor: chartColors.grey,
-          borderColor: chartColors.grey,
-          data: capacity,
-          fill: true,
-          pointRadius: 0,
-          yAxisID: 'cap'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      title: {
-        display: true,
-        text: 'Channel variation'
+  Highcharts.chart(nodeHistory, {
+    title: {text: 'Channel variation'},
+    yAxis: [{visible: false}, {visible: false}, {visible: false}],
+    series: [
+      {
+        name: 'capacity (sat)',
+        type: 'area',
+        data: capacity,
+        step: 'left',
+        yAxis: 2,
+        color: 'var(--gold)'
       },
-      tooltips: {
-        mode: 'index',
-        intersect: false
+      {
+        name: 'total',
+        type: 'area',
+        data: total,
+        step: 'left',
+        yAxis: 1,
+        color: 'var(--blue)'
       },
-      hover: {
-        mode: 'nearest',
-        intersect: true
+      {
+        name: 'openings',
+        type: 'column',
+        data: openings,
+        yAxis: 0,
+        color: 'var(--green)',
+        borderWidth: 1
       },
-      scales: {
-        xAxes: [
-          {
-            display: true,
-            scaleLabel: {
-              display: true,
-              labelString: 'Block number (every 100)'
-            }
-          }
-        ],
-        yAxes: [
-          {
-            id: 'acc',
-            type: 'linear',
-            display: true,
-            position: 'right',
-            scaleLabel: {
-              display: true,
-              labelString: 'Total channels'
-            }
-          },
-          {
-            id: 'cap',
-            type: 'linear',
-            display: false
-          },
-          {
-            id: 'change',
-            type: 'logarithmic',
-            display: true,
-            position: 'left',
-            scaleLabel: {
-              display: true,
-              labelString: 'Channel open/closes'
-            },
-            ticks: {
-              callback: function(value, index, values) {
-                if (
-                  index === 0 ||
-                  index === values.length - 1 ||
-                  value.toString()[0] === '1'
-                ) {
-                  return '' + value
-                }
-              }
-            }
-          }
-        ]
+      {
+        name: 'closings',
+        type: 'column',
+        data: closings,
+        yAxis: 0,
+        color: 'var(--red)',
+        borderWidth: 1
       }
-    }
+    ],
+    plotOptions
   })
 }
