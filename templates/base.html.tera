@@ -1,7 +1,7 @@
 <!doctype html>
 
 <meta charset=utf-8>
-<title>lnchannels.alhur.es</title>
+<title>ln.alhur.es</title>
 <meta name=description content="A compendium of Lightning Network channels useful statistics.">
 <link rel=stylesheet href=https://unpkg.com/style.css>
 <link rel=stylesheet href=https://unpkg.com/top-bar.css>
@@ -11,7 +11,7 @@
 <script src=https://cdnjs.cloudflare.com/ajax/libs/highcharts/7.1.2/highcharts.js></script>
 
 <nav class="top-bar">
-  <a href="/" class="top-bar-title">lnchannels.alhur.es</a>
+  <a href="/" class="top-bar-title">ln.alhur.es</a>
 
   <div class="top-bar-right">
     <a href="/static/channels.db" class="top-bar-link">download all data</a>

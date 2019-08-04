@@ -6,4 +6,4 @@ deploy: target/release/lnchannels templates static channels.db
 	rsync --progress -r templates hutt:lnchannels/
 	rsync --progress -r static hutt:lnchannels/
 	rsync --progress channels.db hutt:lnchannels/static/channels.db
-	ssh hutt 'ln -sf lnchannels/static/channels.db lnchannels/channels.db'
+	ssh hutt 'ln -sf ./static/channels.db lnchannels/channels.db'
