@@ -14,6 +14,7 @@
   <a href="/" class="top-bar-title">lnchannels.alhur.es</a>
 
   <div class="top-bar-right">
+    <a href="/static/channels.db" class="top-bar-link">download all data</a>
     <a href="https://twitter.com/fiatjaf" class="top-bar-link">@fiatjaf</a>
   </div>
 </nav>
