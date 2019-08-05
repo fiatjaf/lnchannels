@@ -37,7 +37,13 @@ if (openClose) {
     xAxis: {
       categories: window.blocks.map(b => b.toString().slice(0, -2) + '__')
     },
-    yAxis: [{visible: false}, {visible: false}, {visible: false}],
+    yAxis: [
+      {visible: false},
+      {visible: false},
+      {visible: false},
+      {visible: false},
+      {visible: false}
+    ],
     series: [
       {
         name: 'capacity (btc)',
@@ -70,6 +76,25 @@ if (openClose) {
         yAxis: 0,
         color: 'var(--red)',
         borderWidth: 1
+      },
+      {
+        name: 'fee total (sat)',
+        type: 'spline',
+        data: window.fee_total,
+        yAxis: 3,
+        color: 'rgba(0, 0, 0, 0.5)',
+        lineWidth: 1,
+        visible: false
+      },
+      {
+        name: 'fee average (sat/n)',
+        type: 'spline',
+        data: window.fee_average,
+        yAxis: 4,
+        color: 'rgba(0, 0, 0, 0.7)',
+        dashStyle: 'Dash',
+        lineWidth: 1,
+        visible: false
       }
     ],
     plotOptions

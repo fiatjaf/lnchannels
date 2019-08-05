@@ -46,20 +46,23 @@ fn index() -> Result<Template> {
     println!("{}---{}", first_block, last_block);
 
     // channel variation chart
-    let mut blocks: Vec<i32> = Vec::new();
-    let mut openings: Vec<i32> = Vec::new();
-    let mut closings: Vec<i32> = Vec::new();
-    let mut total: Vec<i32> = Vec::new();
+    let mut blocks: Vec<i64> = Vec::new();
+    let mut openings: Vec<i64> = Vec::new();
+    let mut closings: Vec<i64> = Vec::new();
+    let mut total: Vec<i64> = Vec::new();
     let mut capacity: Vec<i64> = Vec::new();
+    let mut fee_total: Vec<i64> = Vec::new();
+    let mut fee_average: Vec<f64> = Vec::new();
     let mut q = conn.prepare(
         r#"
-SELECT blockgroup, sum(opened) AS opened, sum(closed) AS closed, sum(cap_change) AS cap_change
+SELECT blockgroup, sum(opened) AS opened, sum(closed) AS closed, sum(cap_change) AS cap_change, fee_total
 FROM (
     -- initial aggregates
     SELECT ((?1/100)-1)*100 AS blockgroup,
       count(*) AS opened,
       0 AS closed,
-      sum(satoshis) AS cap_change
+      sum(satoshis) AS cap_change,
+      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total
     FROM channels
     WHERE open_block < ?1
   UNION ALL
@@ -67,7 +70,8 @@ FROM (
     SELECT (open_block/100)*100 AS blockgroup,
       count(open_block) AS opened,
       0 AS closed,
-      sum(satoshis) AS cap_change
+      sum(satoshis) AS cap_change,
+      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total
     FROM channels
     WHERE open_block >= ?1
     GROUP BY open_block/100
@@ -76,7 +80,8 @@ FROM (
     SELECT (close_block/100)*100 AS blockgroup,
       0 AS opened,
       count(close_block) AS closed,
-      -sum(satoshis) AS cap_change
+      -sum(satoshis) AS cap_change,
+      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total
     FROM channels
     WHERE close_block IS NOT NULL AND close_block >= ?1
     GROUP BY open_block/100
@@ -88,31 +93,36 @@ ORDER BY blockgroup
     let mut rows = q.query(params![first_block])?;
     while let Some(row) = rows.next()? {
         blocks.push(row.get(0)?);
-        let opens: i32 = row.get(1)?;
-        let closes: i32 = row.get(2)?;
+        let opens: i64 = row.get(1)?;
+        let closes: i64 = row.get(2)?;
         openings.push(opens);
         closings.push(closes);
-        total.push(
-            *match total.last() {
-                Some(curr) => curr,
-                None => &0i32,
-            } + opens
-                - closes,
-        );
+        let current_total = *match total.last() {
+            Some(curr) => curr,
+            None => &0i64,
+        } + opens
+            - closes;
+        total.push(current_total);
+
         let cap_change_sat: i64 = row.get(3)?;
         let cap_change = cap_change_sat / 100000000;
-        capacity.push(
-            *match capacity.last() {
-                Some(curr) => curr,
-                None => &0i64,
-            } + cap_change,
-        );
+        let current_cap = *match capacity.last() {
+            Some(curr) => curr,
+            None => &0i64,
+        } + cap_change;
+        capacity.push(current_cap);
+
+        let fee: i64 = row.get(4)?;
+        fee_total.push(fee);
+        fee_average.push(fee as f64 / current_total as f64);
     }
     context.insert("blocks", &blocks[1..]);
     context.insert("openings", &openings[1..]);
     context.insert("closings", &closings[1..]);
     context.insert("total", &total[1..]);
     context.insert("capacity", &capacity[1..]);
+    context.insert("fee_total", &fee_total[1..]);
+    context.insert("fee_average", &fee_average[1..]);
 
     // longest-living channels
     let mut longestliving = Vec::new();

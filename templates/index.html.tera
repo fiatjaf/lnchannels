@@ -58,5 +58,7 @@ window.openings = {{ openings | safe | json_encode }}
 window.closings = {{ closings | safe | json_encode }}
 window.total = {{ total | safe | json_encode }}
 window.capacity = {{ capacity | safe | json_encode }}
+window.fee_total = {{ fee_total | safe | json_encode }}
+window.fee_average = {{ fee_average | safe | json_encode }}
 </script>
 {% endblock body %}
