@@ -16,8 +16,8 @@
     <th>nodes</th>
     <td>
       <table>
-        <tr><td><a href="/node/{{ channel.node0 }}">{{ channel.node0 }}</a></td></tr>
-        <tr><td><a href="/node/{{ channel.node1 }}">{{ channel.node1 }}</a></td></tr>
+        <tr><td><a href="/node/{{ channel.node0 }}">{{ channel.node0name }}</a></td></tr>
+        <tr><td><a href="/node/{{ channel.node1 }}">{{ channel.node1name }}</a></td></tr>
       </table>
     </td>
   </tr>

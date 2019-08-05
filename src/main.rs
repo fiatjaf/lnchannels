@@ -272,12 +272,17 @@ fn show_channel(short_channel_id: String) -> Result<Template> {
     let conn = Connection::open("channels.db")?;
 
     let channel = conn.query_row(
-        "SELECT
+        r#"
+        SELECT
             open_block, open_fee, open_transaction, open_time, 
             close_block, close_fee, close_transaction, close_time,
-            address, node0, node1, satoshis, last_seen,
-            short_channel_id
-        FROM channels WHERE short_channel_id = ?1",
+            address, node0, node1, satoshis,
+            short_channel_id, n0.alias, n1.alias
+        FROM channels
+        INNER JOIN nodealiases AS n0 ON n0.pubkey = node0
+        INNER JOIN nodealiases AS n1 ON n1.pubkey = node1
+        WHERE short_channel_id = ?1
+        "#,
         params![short_channel_id],
         |row| {
             Ok(FullChannel {
@@ -293,8 +298,9 @@ fn show_channel(short_channel_id: String) -> Result<Template> {
                 node0: row.get(9)?,
                 node1: row.get(10)?,
                 satoshis: row.get(11)?,
-                // last_seen: row.get(12)?,
-                short_channel_id: row.get(13)?,
+                short_channel_id: row.get(12)?,
+                node0name: row.get(13)?,
+                node1name: row.get(14)?,
             })
         },
     )?;
@@ -376,9 +382,10 @@ struct FullChannel {
     close_transaction: String,
     address: String,
     node0: String,
+    node0name: String,
     node1: String,
+    node1name: String,
     satoshis: i64,
-    // last_seen: i64,
 }
 
 #[derive(Serialize)]
