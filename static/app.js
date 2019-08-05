@@ -1,10 +1,10 @@
 /** @format */
 
 // -- global
-var Highcharts = window.Highcharts
-var autoComplete = window.autoComplete
-var fetch = window.fetch
-var plotOptions = {
+const Highcharts = window.Highcharts
+const AutoComplete = window.autoComplete
+const fetch = window.fetch
+const plotOptions = {
   series: {
     turboThreshold: 1,
     marker: {enabled: false}
@@ -12,7 +12,7 @@ var plotOptions = {
 }
 
 // -- base.html
-new autoComplete({
+new AutoComplete({
   selector: '#search',
   source(term, response) {
     if (term.length < 3) response([])
@@ -30,7 +30,7 @@ new autoComplete({
 })
 
 // -- index.html
-var openClose = document.getElementById('open-close')
+let openClose = document.getElementById('open-close')
 if (openClose) {
   Highcharts.chart(openClose, {
     title: {text: ''},
@@ -77,21 +77,24 @@ if (openClose) {
 }
 
 // -- node.html
-var nodeHistory = document.getElementById('node-channels-history')
+let nodeHistory = document.getElementById('node-channels-history')
 if (nodeHistory) {
   var blockmap = {}
   var opens = {}
   var closes = {}
   var open_sats = {}
   var close_sats = {}
+  var maxfee = 0
+  var maxcap = 0
 
-  var rows = document.querySelectorAll('table.node-channels-history tbody tr')
-  for (var i = rows.length - 1; i >= 0; i--) {
-    var row = rows[i]
-    var satoshis = parseFloat(row.children[2].innerHTML)
-    var opened_at = parseInt(row.children[3].innerHTML)
-    var closed_at = parseInt(row.children[4].innerHTML)
+  let rows = document.querySelectorAll('table.node-channels-history tbody tr')
+  for (let i = rows.length - 1; i >= 0; i--) {
+    let row = rows[i]
+    let satoshis = parseFloat(row.children[2].innerHTML)
+    let opened_at = parseInt(row.children[4].innerHTML)
+    let closed_at = parseInt(row.children[5].innerHTML.split(' ')[0])
 
+    // gather data for the chart
     opens[opened_at] = opens[opened_at] || 0
     open_sats[opened_at] = open_sats[opened_at] || 0
     opens[opened_at]++
@@ -105,17 +108,24 @@ if (nodeHistory) {
       close_sats[closed_at] += satoshis
       blockmap[closed_at] = true
     }
+
+    // data for the microcharts later
+    let fee = parseInt(row.children[3].innerHTML.split(' ').slice(-1)[0])
+    maxfee = fee > maxfee ? fee : maxfee
+    let cap = parseInt(row.children[2].innerHTML)
+    maxcap = cap > maxcap ? cap : maxcap
   }
 
-  var blocks = Object.keys(blockmap).sort()
+  // make chart
+  let blocks = Object.keys(blockmap).sort()
   var openings = []
   var closings = []
   var total = []
   var capacity = []
 
-  for (i = 0; i < blocks.length; i++) {
-    var b = blocks[i]
-    var x = parseInt(b)
+  for (let i = 0; i < blocks.length; i++) {
+    let b = blocks[i]
+    let x = parseInt(b)
     openings.push([x, opens[b] || 0])
     closings.push([x, closes[b] || 0])
     total.push([
@@ -171,4 +181,20 @@ if (nodeHistory) {
     ],
     plotOptions
   })
+
+  // create microcharts
+  for (let i = 0; i < rows.length; i++) {
+    let row = rows[i]
+
+    // fee
+    let fee = parseInt(row.children[3].innerHTML.split(' ').slice(-1)[0])
+    let feescaled = 100 * (fee / maxfee)
+    let fw = feescaled.toFixed(2)
+    row.children[3].innerHTML += `<i class="bar" style="width:${fw}%; background: var(--gold)" />`
+
+    // capacity
+    let capscaled = (100 * parseInt(row.children[2].innerHTML)) / maxcap
+    let cw = capscaled.toFixed(2)
+    row.children[2].innerHTML += `<i class="bar" style="width:${cw}%; background: var(--gold)" />`
+  }
 }

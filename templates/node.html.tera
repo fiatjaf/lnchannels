@@ -39,7 +39,8 @@
       <tr>
         <th>with</th>
         <th>id</th>
-        <th>satoshis</th>
+        <th>total satoshis</th>
+        <th>fee paid</th>
         <th>open</th>
         <th>close</th>
       </tr>
@@ -50,6 +51,7 @@
         <td><a href="/node/{{ channel.peer_id }}">{% if channel.peer_name %}{{ channel.peer_name }}{% else %}{{ channel.peer_id | abbr }}{% endif %}</a></td>
         <td><a href="/channel/{{ channel.short_channel_id }}">{{ channel.short_channel_id }}</a></td>
         <td>{{ channel.satoshis }}</td>
+        <td title="{{ 100 * (channel.open_fee + channel.close_fee) / channel.satoshis | round(method="ceil", precision=2) }}% of the channel value">{{ channel.open_fee }}{% if channel.close_block > 0 %} + {{ channel.close_fee }} = {{ channel.open_fee + channel.close_fee }}{% endif %}</td>
         <td>{{ channel.open_block }}</td>
         <td>{% if channel.close_block > 0 %}{{ channel.close_block }}{% endif %}</td>
       </tr>

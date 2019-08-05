@@ -3,14 +3,25 @@
   --green: #43c160;
   --blue: #7cb5ec;
   --gold: #ffd85a;
+  --orange: #fda23c;
 }
 
 main { margin: 0 1rem; }
 h1, h2, h3, h4, h5, h6 { white-space: pre-wrap; word-wrap: break-word; }
-td { font-family: monospace; font-size: 0.9em; }
+td { font-family: monospace; font-size: 0.9em; position: relative; }
+table tr:nth-child(2n) { background-color: #fdfdfd; }
 
 pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
 .closed { background: var(--red) !important; }
+.bar {
+  display: inline-block;
+  opacity: 0.2;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background-color: #333;
+}
 
 #search { margin: 0.8rem 12px; width: 25%; min-width: 300px; font-size: 0.8em; }
 .search-item { font-family: monospace; padding: 0.1em 0.4em; }

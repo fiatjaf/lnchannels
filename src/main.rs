@@ -241,8 +241,8 @@ SELECT
   short_channel_id,
   CASE WHEN node0 = ?1 THEN node1 ELSE node0 END AS peer_id,
   coalesce((SELECT alias FROM nodealiases WHERE pubkey = (CASE WHEN node0 = ?1 THEN node1 ELSE node0 END) ORDER BY last_seen DESC LIMIT 1), '') AS peer_name,
-  open_block, open_time,
-  close_block, close_time,
+  open_block, open_fee,
+  close_block, close_fee,
   satoshis
 FROM channels
 WHERE node0 = ?1 OR node1 = ?1
@@ -256,9 +256,9 @@ ORDER BY open_block DESC
             peer_id: row.get(1)?,
             peer_name: row.get(2)?,
             open_block: row.get(3).unwrap_or(0),
-            open_time: row.get(4).unwrap_or("".to_string()),
+            open_fee: row.get(4).unwrap_or(0),
             close_block: row.get(5).unwrap_or(0),
-            close_time: row.get(6).unwrap_or("".to_string()),
+            close_fee: row.get(6).unwrap_or(0),
             satoshis: row.get(7)?,
         };
         channels.push(channel);
@@ -423,9 +423,9 @@ struct NodeChannel {
     peer_name: String,
     short_channel_id: String,
     open_block: i64,
-    open_time: String,
+    open_fee: i64,
     close_block: i64,
-    close_time: String,
+    close_fee: i64,
     satoshis: i64,
 }
 
