@@ -1,8 +1,8 @@
 <!doctype html>
 
 <meta charset=utf-8>
-<title>ln.alhur.es</title>
-<meta name=description content="A compendium of Lightning Network channels useful statistics.">
+<title>{% block title %}{% endblock title %}ln.alhur.es</title>
+<meta name=description content="{% block description %}A compendium of historical data about the Lightning Network nodes and channels.{% endblock description %}">
 <link rel=stylesheet href=https://unpkg.com/style.css>
 <link rel=stylesheet href=https://unpkg.com/top-bar.css>
 <link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/highcharts/7.1.2/css/highcharts.css>

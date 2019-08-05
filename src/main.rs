@@ -9,6 +9,7 @@ extern crate rocket_contrib;
 extern crate rusqlite;
 extern crate serde;
 extern crate serde_json;
+extern crate tera;
 
 use rocket_contrib::json::JsonValue;
 use rocket_contrib::serve::StaticFiles;
@@ -206,11 +207,12 @@ LIMIT 50
     Ok(Template::render("index", &context))
 }
 
-#[get("/node/<pubkey>")]
-fn show_node(pubkey: String) -> Result<Template> {
+#[get("/node/<nodeid>")]
+fn show_node(nodeid: String) -> Result<Template> {
     let mut context = Context::new();
     let conn = Connection::open("channels.db")?;
 
+    let pubkey = nodeid.to_lowercase();
     context.insert("node", &pubkey);
 
     let mut aliases = Vec::new();
@@ -262,6 +264,14 @@ ORDER BY open_block DESC
         channels.push(channel);
     }
     context.insert("channels", &channels);
+
+    // a canonical node name
+    if aliases.len() > 0 {
+        context.insert("nodename", &aliases[0].alias);
+    } else {
+        let nodename = abbreviate(pubkey);
+        context.insert("nodename", &nodename);
+    }
 
     Ok(Template::render("node", &context))
 }
@@ -430,8 +440,23 @@ struct NodeActivity {
 
 fn main() {
     rocket::ignite()
-        .attach(Template::fairing())
+        .attach(Template::custom(|engines| {
+            engines.tera.register_filter(
+                "abbr",
+                move |val: tera::Value, _args| -> tera::Result<tera::Value> {
+                    match val.clone() {
+                        tera::Value::String(v) => Ok(tera::Value::String(abbreviate(v))),
+                        _ => Ok(val),
+                    }
+                },
+            );
+        }))
         .mount("/", routes![index, show_channel, show_node, search])
         .mount("/static", StaticFiles::from("static"))
         .launch();
+}
+
+fn abbreviate(long: String) -> String {
+    let last = long.len() - 4;
+    format!("{}…{}", &long[..4], &long[last..])
 }

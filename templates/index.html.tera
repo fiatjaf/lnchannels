@@ -17,7 +17,7 @@
     <tbody>
     {% for node in mostactivity %}
       <tr>
-        <td><a href="/node/{{ node.id }}">{{ node.name }}</a></td>
+        <td><a href="/node/{{ node.id }}">{% if node.name %}{{ node.name }}{% else %}{{ node.id | abbr }}{% endif %}</a></td>
         <td>{{ node.open_now }}</td>
         <td>{{ node.historical_total }}</td>
         <td>{{ node.avg_duration | round }}</td>
@@ -43,8 +43,8 @@
       <tr class="{% if chan.closed %}closed{% endif %}">
         <td><a href="/channel/{{ chan.short_channel_id }}">{{ chan.short_channel_id }}</a></td>
         <td>{{ chan.open_block }}</td>
-        <td><a href="/node/{{ chan.id0 }}">{{ chan.name0 }}</a></td>
-        <td><a href="/node/{{ chan.id1 }}">{{ chan.name1 }}</a></td>
+        <td><a href="/node/{{ chan.id0 }}">{% if chan.name0 %}{{ chan.name0 }}{% else %}{{ chan.id0 | abbr }}{% endif %}</a></td>
+        <td><a href="/node/{{ chan.id1 }}">{% if chan.name1 %}{{ chan.name1 }}{% else %}{{ chan.id1 | abbr }}{% endif %}</a></td>
         <td>{{ chan.duration }}</td>
       </tr>
     {% endfor %}

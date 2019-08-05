@@ -1,4 +1,7 @@
 {% extends "base" %}
+{% block title %}node "{{ nodename }}" | {% endblock title %}
+{% block description %}Historical data and charts about the channels of the Lightning Network node '{{ nodename }}'.{% endblock description %}
+
 {% block body %}
 <h1>node <pre class="id">{{ node }}</pre></h1>
 
@@ -44,7 +47,7 @@
     <tbody>
     {% for channel in channels %}
       <tr class="{% if channel.close_block > 0 %}closed{% endif %}">
-        <td><a href="/node/{{ channel.peer_id }}">{{ channel.peer_name }}</a></td>
+        <td><a href="/node/{{ channel.peer_id }}">{% if channel.peer_name %}{{ channel.peer_name }}{% else %}{{ channel.peer_id | abbr }}{% endif %}</a></td>
         <td><a href="/channel/{{ channel.short_channel_id }}">{{ channel.short_channel_id }}</a></td>
         <td>{{ channel.satoshis }}</td>
         <td>{{ channel.open_block }}</td>

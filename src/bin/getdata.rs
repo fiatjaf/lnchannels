@@ -105,7 +105,7 @@ fn run() -> Result<()> {
     )
     .chain_err(|| "failed to create index")?;
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS index_pubkey ON channels(pubkey)",
+        "CREATE INDEX IF NOT EXISTS index_pubkey ON nodealiases(pubkey)",
         NO_PARAMS,
     )
     .chain_err(|| "failed to create index")?;

@@ -12,6 +12,7 @@ serde = "1.0.91"
 error-chain = "0.12.1"
 jsonrpc = "0.11.0"
 docopt = "1"
+tera = "0.11.20"
 
 [dependencies.rusqlite]
 version = "0.18.0"

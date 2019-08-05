@@ -1,4 +1,7 @@
 {% extends "base" %}
+{% block title %}channel {{ channel.short_channel_id }} | {% endblock title %}
+{% block description %}Information about the Lightning Network channel {{ channel.short_channel_id }} between {{ channel.node0name }} and {{ channel.node1name }}.{% endblock description %}
+
 {% block body %}
 <h1>channel <pre class="id">{{ channel.short_channel_id }}</pre></h1>
 
@@ -16,8 +19,8 @@
     <th>nodes</th>
     <td>
       <table>
-        <tr><td><a href="/node/{{ channel.node0 }}">{{ channel.node0name }}</a></td></tr>
-        <tr><td><a href="/node/{{ channel.node1 }}">{{ channel.node1name }}</a></td></tr>
+        <td><a href="/node/{{ channel.node0 }}">{% if channel.node0name %}{{ channel.node0name}}{% else %}{{ channel.node0 | abbr }}{% endif %}</a></td>
+        <td><a href="/node/{{ channel.node1 }}">{% if channel.node1name %}{{ channel.node1name}}{% else %}{{ channel.node1 | abbr }}{% endif %}</a></td>
       </table>
     </td>
   </tr>
