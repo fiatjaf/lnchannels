@@ -6,5 +6,13 @@
 }
 
 main { margin: 0 1rem; }
-tr.closed { background: var(--red) !important; }
+h1, h2, h3, h4, h5, h6 { white-space: pre-wrap; word-wrap: break-word; }
 td { font-family: monospace; font-size: 0.9em; }
+
+pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
+.closed { background: var(--red) !important; }
+
+#search { margin: 0.8rem 12px; width: 25%; min-width: 300px; font-size: 0.8em; }
+.search-item { font-family: monospace; padding: 0.1em 0.4em; }
+.search-item:hover { background: whitesmoke; }
+.search-item a { text-decoration: none; color: inherit; }

@@ -1,6 +1,9 @@
 /** @format */
 
+// -- global
 var Highcharts = window.Highcharts
+var autoComplete = window.autoComplete
+var fetch = window.fetch
 var plotOptions = {
   series: {
     turboThreshold: 1,
@@ -8,11 +11,29 @@ var plotOptions = {
   }
 }
 
+// -- base.html
+new autoComplete({
+  selector: '#search',
+  source(term, response) {
+    if (term.length < 3) response([])
+
+    fetch('/search?q=' + encodeURIComponent(term))
+      .then(r => r.json())
+      .then(res => response(res.results))
+  },
+  renderItem({closed, url, label, kind}) {
+    return `<div class="search-item ${closed ? 'closed' : ''}">
+        <a href="${url}">${kind === 'node' ? '⏺' : '⤢'} ${label}</a>
+    </div>`
+  },
+  cache: true
+})
+
 // -- index.html
 var openClose = document.getElementById('open-close')
 if (openClose) {
   Highcharts.chart(openClose, {
-    title: {text: 'Channel variation'},
+    title: {text: ''},
     xAxis: {
       categories: window.blocks.map(b => b.toString().slice(0, -2) + '__')
     },
@@ -112,7 +133,7 @@ if (nodeHistory) {
   }
 
   Highcharts.chart(nodeHistory, {
-    title: {text: 'Channel variation'},
+    title: {text: ''},
     yAxis: [{visible: false}, {visible: false}, {visible: false}],
     series: [
       {

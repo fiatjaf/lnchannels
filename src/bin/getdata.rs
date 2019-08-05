@@ -89,6 +89,15 @@ fn run() -> Result<()> {
     )
     .chain_err(|| "failed to create table")?;
 
+    conn.execute("CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id)")
+        .chain_err(|| "failed to create index")?;
+    conn.execute("CREATE INDEX IF NOT EXISTS index_node0 ON channels(node0)")
+        .chain_err(|| "failed to create index")?;
+    conn.execute("CREATE INDEX IF NOT EXISTS index_node1 ON channels(node1)")
+        .chain_err(|| "failed to create index")?;
+    conn.execute("CREATE INDEX IF NOT EXISTS index_pubkey ON channels(pubkey)")
+        .chain_err(|| "failed to create index")?;
+
     let mut i = 0;
     if !args.flag_justcheckcloses
         && !args.flag_justenrich

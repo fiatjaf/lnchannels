@@ -1,9 +1,9 @@
 {% extends "base" %}
 {% block body %}
-<h1>channel {{ channel.short_channel_id }}</h1>
+<h1>channel <pre class="id">{{ channel.short_channel_id }}</pre></h1>
 
+<h4>details</h4>
 <table>
-  <caption>details</caption>
   <tr>
     <th>short_channel_id</th>
     <td>{{ channel.short_channel_id }}</td>
@@ -23,8 +23,8 @@
   </tr>
 </table>
 
+<h4>open details</h4>
 <table>
-  <caption>open details</caption>
   <tr>
     <th>block</th>
     <th>transaction</th>
@@ -40,8 +40,8 @@
 </table>
 
 {% if channel.close_block %}
+  <h4>close details</h4>
   <table>
-    <caption>close details</caption>
     <tr>
       <th>block</th>
       <th>transaction</th>

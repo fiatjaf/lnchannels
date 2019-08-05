@@ -4,11 +4,13 @@
 extern crate rocket;
 #[macro_use]
 extern crate error_chain;
+#[macro_use]
 extern crate rocket_contrib;
 extern crate rusqlite;
 extern crate serde;
 extern crate serde_json;
 
+use rocket_contrib::json::JsonValue;
 use rocket_contrib::serve::StaticFiles;
 use rocket_contrib::templates::tera::Context;
 use rocket_contrib::templates::Template;
@@ -301,6 +303,66 @@ fn show_channel(short_channel_id: String) -> Result<Template> {
     Ok(Template::render("channel", &context))
 }
 
+#[get("/search?<q>")]
+fn search(q: String) -> Result<JsonValue> {
+    let conn = Connection::open("channels.db")?;
+    let mut results: Vec<SearchResult> = Vec::new();
+
+    let search: String = q.trim().to_string();
+
+    // search node alias
+    let mut query = conn.prepare(
+        r#"
+  SELECT
+    'channel' AS kind,
+    short_channel_id || ' (' || satoshis || ' sat)' AS label,
+    '/channel/' || short_channel_id AS url,
+    close_block IS NOT NULL AS closed,
+    0
+  FROM channels WHERE short_channel_id >= ?1 and short_channel_id < ?1 || '{'
+UNION ALL
+  SELECT
+    'node' AS kind,
+    alias || ' (' || (SELECT count(*) FROM channels WHERE (node0 = pubkey OR node1 = pubkey) AND close_block IS NULL) || ' channels)' AS label,
+    '/node/' || pubkey AS url,
+    false AS closed,
+    0
+  FROM nodealiases WHERE pubkey >= ?1 AND pubkey < ?1 || '{'
+UNION ALL
+  SELECT
+    'node ' AS kind,
+    alias || ' (' || nchannels || ' channels)' AS label,
+    '/node/' || pubkey AS url,
+    false AS closed,
+    nchannels
+  FROM (
+    SELECT *,
+      (SELECT count(*) FROM channels WHERE (node0 = pubkey OR node1 = pubkey) AND close_block IS NULL) AS nchannels
+    FROM (SELECT pubkey, alias FROM nodealiases WHERE alias LIKE '%' || ?1 || '%')
+  )
+  ORDER BY nchannels DESC
+    "#,
+    )?;
+    let mut rows = query.query(params![search])?;
+    while let Some(row) = rows.next()? {
+        results.push(SearchResult {
+            kind: row.get(0)?,
+            label: row.get(1)?,
+            url: row.get(2)?,
+            closed: row.get(3)?,
+        });
+    }
+    Ok(json!({ "results": results }))
+}
+
+#[derive(Serialize)]
+struct SearchResult {
+    kind: String,
+    label: String,
+    url: String,
+    closed: bool,
+}
+
 #[derive(Serialize)]
 struct FullChannel {
     short_channel_id: String,
@@ -362,7 +424,7 @@ struct NodeActivity {
 fn main() {
     rocket::ignite()
         .attach(Template::fairing())
-        .mount("/", routes![index, show_channel, show_node])
+        .mount("/", routes![index, show_channel, show_node, search])
         .mount("/static", StaticFiles::from("static"))
         .launch();
 }

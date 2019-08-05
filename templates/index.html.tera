@@ -1,17 +1,17 @@
 {% extends "base" %}
 {% block body %}
 <div class="pa4">
-   <div id=open-close />
+  <div id=open-close />
 </div>
 <div class="pa4 overflow-auto">
-  <h1>nodes with most channel activity</h1>
+  <h4>nodes with most channel activity</h4>
   <table id=node-history class="f6 w-100 mw8 center">
     <thead>
       <tr class="tr">
         <th>node</th>
         <th>open channels now</th>
-        <th>historical channels</th>
-        <th>average channel duration</th>
+        <th>total historical channels</th>
+        <th>average channel duration (blocks)</th>
       </tr>
     </thead>
     <tbody>
@@ -20,14 +20,14 @@
         <td><a href="/node/{{ node.id }}">{{ node.name }}</a></td>
         <td>{{ node.open_now }}</td>
         <td>{{ node.historical_total }}</td>
-        <td>{{ node.avg_duration }}</td>
+        <td>{{ node.avg_duration | round }}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
 <div class="pa4 overflow-auto">
-  <h1>longest living channels</h1>
+  <h4>longest living channels</h4>
   <table id=longest-living class="f6 w-100 mw8 center">
     <thead>
       <tr class="tr">

@@ -5,13 +5,15 @@
 <meta name=description content="A compendium of Lightning Network channels useful statistics.">
 <link rel=stylesheet href=https://unpkg.com/style.css>
 <link rel=stylesheet href=https://unpkg.com/top-bar.css>
-<link rel=stylesheet href=https://unpkg.com/tachyons@4.10.0/css/tachyons.min.css>
 <link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/highcharts/7.1.2/css/highcharts.css>
+<link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/JavaScript-autoComplete/1.0.4/auto-complete.min.css>
 <link rel=stylesheet href=/static/style.css>
 <script src=https://cdnjs.cloudflare.com/ajax/libs/highcharts/7.1.2/highcharts.js></script>
+<script src=https://cdnjs.cloudflare.com/ajax/libs/JavaScript-autoComplete/1.0.4/auto-complete.js></script>
 
 <nav class="top-bar">
   <a href="/" class="top-bar-title">ln.alhur.es</a>
+  <input id="search" placeholder="search node id or name, channel id or block">
 
   <div class="top-bar-right">
     <a href="/static/channels.db" class="top-bar-link">download all data</a>
@@ -19,9 +21,11 @@
   </div>
 </nav>
 
+<div id="searchresults"></div>
+
 <main>
 {% block body %}
 {% endblock body %}
 </main>
 
-<script src="/static/charts.js"></script>
+<script src="/static/app.js"></script>

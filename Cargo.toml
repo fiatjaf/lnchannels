@@ -20,4 +20,4 @@ features = ["bundled"]
 [dependencies.rocket_contrib]
 version = "0.4.1"
 default-features = false
-features = ["tera_templates", "serve"]
+features = ["tera_templates", "serve", "json"]

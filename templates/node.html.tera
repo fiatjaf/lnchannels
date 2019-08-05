@@ -1,11 +1,11 @@
 {% extends "base" %}
 {% block body %}
-<h1>node {{ node }}</h1>
+<h1>node <pre class="id">{{ node }}</pre></h1>
 
 <div>
   {% if aliases %}
+  <h4>node names</h4>
   <table>
-    <caption>node names</caption>
     <thead>
       <tr>
         <th>alias</th>
@@ -25,12 +25,13 @@
 </div>
 
 <div class="pa4">
-   <div id=node-channels-history />
+  <h4>channel variation</h4>
+  <div id=node-channels-history />
 </div>
 
 <div>
+  <h4>all channels</h4>
   <table class=node-channels-history>
-    <caption>all channels</caption>
     <thead>
       <tr>
         <th>with</th>
