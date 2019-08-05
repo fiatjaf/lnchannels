@@ -99,10 +99,10 @@ if (nodeHistory) {
     blockmap[opened_at] = true
 
     if (!isNaN(closed_at)) {
-      closes[opened_at] = closes[opened_at] || 0
-      close_sats[opened_at] = close_sats[opened_at] || 0
-      closes[opened_at]++
-      close_sats[opened_at] += satoshis
+      closes[closed_at] = closes[closed_at] || 0
+      close_sats[closed_at] = close_sats[closed_at] || 0
+      closes[closed_at]++
+      close_sats[closed_at] += satoshis
       blockmap[closed_at] = true
     }
   }
