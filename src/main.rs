@@ -287,10 +287,10 @@ fn show_channel(short_channel_id: String) -> Result<Template> {
             open_block, open_fee, open_transaction, open_time, 
             close_block, close_fee, close_transaction, close_time,
             address, node0, node1, satoshis,
-            short_channel_id, n0.alias, n1.alias
+            short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, '')
         FROM channels
-        INNER JOIN nodealiases AS n0 ON n0.pubkey = node0
-        INNER JOIN nodealiases AS n1 ON n1.pubkey = node1
+        LEFT OUTER JOIN nodealiases AS n0 ON n0.pubkey = node0
+        LEFT OUTER JOIN nodealiases AS n1 ON n1.pubkey = node1
         WHERE short_channel_id = ?1
         "#,
         params![short_channel_id],
