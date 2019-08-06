@@ -25,10 +25,11 @@ const USAGE: &'static str = "
 getdata
 
 Usage:
-  getdata [--skiplistchannels] [--justcheckcloses] [--justenrich] [--justupdatealiases]
+  getdata [--skiplistchannels] [--skiplistnodes] [--justcheckcloses] [--justenrich] [--justupdatealiases]
 
 Options:
   --skiplistchannels      Skips the `listchannels` part and (re-)inserting all channels in the database.
+  --skiplistnodes         Skips the `listnodes` part and (re-)inserting all node aliases in the database.
   --justupdatealiases     Skips everything but updating node aliases.
   --justcheckcloses       Skips everything but checking channels closes (developer usage only).
   --justenrich            Skips everything but fetching time and fee from transactions (developer usage only).
@@ -37,6 +38,7 @@ Options:
 #[derive(Deserialize)]
 struct Args {
     flag_skiplistchannels: bool,
+    flag_skiplistnodes: bool,
     flag_justupdatealiases: bool,
     flag_justcheckcloses: bool,
     flag_justenrich: bool,
@@ -148,7 +150,7 @@ fn run() -> Result<()> {
         }
     }
 
-    if !args.flag_justcheckcloses && !args.flag_justenrich {
+    if !args.flag_justcheckcloses && !args.flag_justenrich && !args.flag_skiplistnodes {
         let nodes = getnodes()?;
         println!("inserting {} aliases", nodes.len());
 
