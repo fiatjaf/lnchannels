@@ -1,7 +1,7 @@
 /** @format */
 
 // -- global
-const Highcharts = window.Highcharts
+const H = window.Highcharts
 const AutoComplete = window.autoComplete
 const fetch = window.fetch
 const plotOptions = {
@@ -30,9 +30,8 @@ new AutoComplete({
 })
 
 // -- index.html
-let openClose = document.getElementById('open-close')
-if (openClose) {
-  Highcharts.chart(openClose, {
+if (document.getElementById('open-close')) {
+  H.chart('open-close', {
     title: {text: ''},
     xAxis: {
       categories: window.blocks.map(b => b.toString().slice(0, -2) + '__')
@@ -102,8 +101,7 @@ if (openClose) {
 }
 
 // -- node.html
-let nodeHistory = document.getElementById('node-channels-history')
-if (nodeHistory) {
+if (document.getElementById('node-channels-history')) {
   var blockmap = {}
   var opens = {}
   var closes = {}
@@ -181,7 +179,7 @@ if (nodeHistory) {
     ])
   }
 
-  Highcharts.chart(nodeHistory, {
+  H.chart('node-channels-history', {
     title: {text: ''},
     yAxis: [{visible: false}, {visible: false}, {visible: false}],
     series: [
@@ -238,7 +236,7 @@ if (nodeHistory) {
   }
 
   // channel bubbles
-  Highcharts.chart('node-channels-bubble', {
+  H.chart('node-channels-bubble', {
     title: {text: ''},
     yAxis: [{title: {text: 'channel size (sat)', enabled: null}, floor: 0}],
     series: [
