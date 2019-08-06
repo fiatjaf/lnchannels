@@ -329,6 +329,47 @@ fn run() -> Result<()> {
         }
     }
 
+    // create materialized views
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS nodes (
+            pubkey TEXT PRIMARY KEY,
+            openchannels INTEGER NOT NULL,
+            closedchannels INTEGER NOT NULL,
+            capacity INTEGER NOT NULL,
+            alias TEXT
+        )",
+        NO_PARAMS,
+    )?;
+    conn.execute("DELETE FROM nodes", NO_PARAMS)?;
+    conn.execute(
+        r#"
+        INSERT INTO nodes (pubkey, alias, openchannels, closedchannels, capacity)
+        SELECT n.pubkey, n.alias, agg.openchannels, aggc.closedchannels, agg.capacity
+        FROM nodealiases AS n
+        INNER JOIN (
+          SELECT pubkey, sum(openchannels) AS openchannels, sum(capacity) AS capacity FROM (
+              SELECT node0 AS pubkey, count(*) AS openchannels, sum(satoshis) AS capacity
+              FROM channels WHERE close_block IS NULL GROUP BY node0
+            UNION ALL
+              SELECT node1 AS pubkey, count(*) AS openchannels, sum(satoshis) AS capacity
+              FROM channels WHERE close_block IS NULL GROUP BY node1
+          ) GROUP BY pubkey
+        ) AS agg ON agg.pubkey = n.pubkey
+        INNER JOIN (
+          SELECT pubkey, sum(closedchannels) AS closedchannels FROM (
+              SELECT node0 AS pubkey, count(*) AS closedchannels
+              FROM channels WHERE close_block IS NOT NULL GROUP BY node0
+            UNION ALL
+              SELECT node1 AS pubkey, count(*) AS closedchannels
+              FROM channels WHERE close_block IS NOT NULL GROUP BY node1
+          ) GROUP BY pubkey
+        ) AS aggc ON aggc.pubkey = n.pubkey
+        GROUP BY n.pubkey
+        ORDER BY n.last_seen
+        "#,
+        NO_PARAMS,
+    )?;
+
     Ok(())
 }
 

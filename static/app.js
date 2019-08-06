@@ -111,6 +111,7 @@ if (nodeHistory) {
   var close_sats = {}
   var maxfee = 0
   var maxcap = 0
+  var openchannelsbubbles = []
 
   let rows = document.querySelectorAll('table.node-channels-history tbody tr')
   for (let i = rows.length - 1; i >= 0; i--) {
@@ -118,6 +119,9 @@ if (nodeHistory) {
     let satoshis = parseFloat(row.children[2].innerHTML)
     let opened_at = parseInt(row.children[4].innerHTML)
     let closed_at = parseInt(row.children[5].innerHTML.split(' ')[0])
+    let peer_name = row.children[0].textContent
+    let peer_size = parseInt(row.children[0].dataset.size)
+    let peer_url = row.children[0].children[0].href
 
     // gather data for the chart
     opens[opened_at] = opens[opened_at] || 0
@@ -127,11 +131,21 @@ if (nodeHistory) {
     blockmap[opened_at] = true
 
     if (!isNaN(closed_at)) {
+      // if it's closed gather close data
       closes[closed_at] = closes[closed_at] || 0
       close_sats[closed_at] = close_sats[closed_at] || 0
       closes[closed_at]++
       close_sats[closed_at] += satoshis
       blockmap[closed_at] = true
+    } else {
+      // if it's open add to bubble chart
+      openchannelsbubbles.push({
+        x: opened_at,
+        y: satoshis,
+        z: peer_size,
+        name: peer_name,
+        url: peer_url
+      })
     }
 
     // data for the microcharts later
@@ -141,7 +155,7 @@ if (nodeHistory) {
     maxcap = cap > maxcap ? cap : maxcap
   }
 
-  // make chart
+  // make main chart
   let blocks = Object.keys(blockmap).sort()
   var openings = []
   var closings = []
@@ -222,4 +236,42 @@ if (nodeHistory) {
     let cw = capscaled.toFixed(2)
     row.children[2].innerHTML += `<i class="bar" style="width:${cw}%; background: var(--gold)" />`
   }
+
+  // channel bubbles
+  Highcharts.chart('node-channels-bubble', {
+    title: {text: ''},
+    yAxis: [{title: {text: 'channel size (sat)', enabled: null}, floor: 0}],
+    series: [
+      {
+        type: 'bubble',
+        data: openchannelsbubbles,
+        marker: {fillColor: 'var(--gold)'},
+        showInLegend: false,
+        minSize: '1%',
+        maxSize: '30%',
+        sizeBy: 'width',
+        dataLabels: {
+          enabled: true,
+          format: '{point.name}',
+          style: {
+            color: 'black',
+            textOutline: 'none',
+            fontWeight: 'normal'
+          }
+        },
+        tooltip: {
+          headerFormat: '',
+          followPointer: true,
+          followTouchMove: true,
+          pointFormat: '{point.name}: {point.y}',
+          valueSuffix: ' sat'
+        },
+        events: {
+          click: e => {
+            location.href = e.point.url
+          }
+        }
+      }
+    ]
+  })
 }

@@ -135,9 +135,9 @@ SELECT
   close_block - open_block AS duration,
   closed,
   node0 AS id0,
-  coalesce((SELECT alias FROM nodealiases WHERE pubkey = node0 ORDER BY last_seen DESC LIMIT 1), '') AS name0,
+  coalesce((SELECT alias FROM nodes WHERE pubkey = node0), '') AS name0,
   node0 AS id1,
-  coalesce((SELECT alias FROM nodealiases WHERE pubkey = node1 ORDER BY last_seen DESC LIMIT 1), '') AS name1
+  coalesce((SELECT alias FROM nodes WHERE pubkey = node1), '') AS name1
 FROM (
   SELECT short_channel_id,
     open_block,
@@ -174,7 +174,7 @@ FROM (
         r#"
 SELECT
   id,
-  coalesce((SELECT alias FROM nodealiases WHERE pubkey = id ORDER BY last_seen DESC LIMIT 1), '') AS name,
+  coalesce((SELECT alias FROM nodes WHERE pubkey = id), '') AS name,
   historical_total,
   historical_total - closed_already AS open_now,
   avg_duration
@@ -250,7 +250,8 @@ ORDER BY first_seen DESC
 SELECT
   short_channel_id,
   CASE WHEN node0 = ?1 THEN node1 ELSE node0 END AS peer_id,
-  coalesce((SELECT alias FROM nodealiases WHERE pubkey = (CASE WHEN node0 = ?1 THEN node1 ELSE node0 END) ORDER BY last_seen DESC LIMIT 1), '') AS peer_name,
+  coalesce((SELECT alias FROM nodes WHERE pubkey = (CASE WHEN node0 = ?1 THEN node1 ELSE node0 END)), '') AS peer_name,
+  coalesce((SELECT capacity FROM nodes WHERE pubkey = (CASE WHEN node0 = ?1 THEN node1 ELSE node0 END)), 0) AS peer_size,
   open_block, open_fee,
   close_block, close_fee,
   satoshis
@@ -265,11 +266,12 @@ ORDER BY open_block DESC
             short_channel_id: row.get(0)?,
             peer_id: row.get(1)?,
             peer_name: row.get(2)?,
-            open_block: row.get(3).unwrap_or(0),
-            open_fee: row.get(4).unwrap_or(0),
-            close_block: row.get(5).unwrap_or(0),
-            close_fee: row.get(6).unwrap_or(0),
-            satoshis: row.get(7)?,
+            peer_size: row.get(3)?,
+            open_block: row.get(4).unwrap_or(0),
+            open_fee: row.get(5).unwrap_or(0),
+            close_block: row.get(6).unwrap_or(0),
+            close_fee: row.get(7).unwrap_or(0),
+            satoshis: row.get(8)?,
         };
         channels.push(channel);
     }
@@ -299,8 +301,8 @@ fn show_channel(short_channel_id: String) -> Result<Template> {
             address, node0, node1, satoshis,
             short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, '')
         FROM channels
-        LEFT OUTER JOIN nodealiases AS n0 ON n0.pubkey = node0
-        LEFT OUTER JOIN nodealiases AS n1 ON n1.pubkey = node1
+        LEFT OUTER JOIN nodes AS n0 ON n0.pubkey = node0
+        LEFT OUTER JOIN nodes AS n1 ON n1.pubkey = node1
         WHERE short_channel_id = ?1
         "#,
         params![short_channel_id],
@@ -349,24 +351,23 @@ fn search(q: String) -> Result<JsonValue> {
 UNION ALL
   SELECT
     'node' AS kind,
-    alias || ' (' || (SELECT count(*) FROM channels WHERE (node0 = pubkey OR node1 = pubkey) AND close_block IS NULL) || ' channels)' AS label,
+    alias || ' (' || openchannels || ' channels)' AS label,
     '/node/' || pubkey AS url,
     false AS closed,
     0
-  FROM nodealiases WHERE pubkey >= ?1 AND pubkey < ?1 || '{'
+  FROM nodes WHERE pubkey >= ?1 AND pubkey < ?1 || '{'
 UNION ALL
-  SELECT
-    'node ' AS kind,
-    alias || ' (' || nchannels || ' channels)' AS label,
+  SELECT                                                                                                                   'node ' AS kind,                                                                                                       alias || ' (' || openchannels || ' channels)' AS label,
     '/node/' || pubkey AS url,
     false AS closed,
-    nchannels
+    capacity
   FROM (
-    SELECT *,
-      (SELECT count(*) FROM channels WHERE (node0 = pubkey OR node1 = pubkey) AND close_block IS NULL) AS nchannels
-    FROM (SELECT pubkey, alias FROM nodealiases WHERE alias LIKE '%' || ?1 || '%')
+    SELECT *, nodes.openchannels AS openchannels, nodes.capacity AS capacity
+    FROM (SELECT pubkey, alias FROM nodealiases WHERE alias LIKE '%' || ?1 || '%') AS namesearch
+    INNER JOIN
+      nodes ON nodes.pubkey = namesearch.pubkey
   )
-  ORDER BY nchannels DESC
+  ORDER BY capacity DESC
     "#,
     )?;
     let mut rows = query.query(params![search])?;
@@ -431,6 +432,7 @@ struct NodeAlias {
 struct NodeChannel {
     peer_id: String,
     peer_name: String,
+    peer_size: i64,
     short_channel_id: String,
     open_block: i64,
     open_fee: i64,

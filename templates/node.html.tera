@@ -11,8 +11,8 @@
   <table>
     <thead>
       <tr>
-        <th>alias</th>
         <th>last seen</th>
+        <th>alias</th>
       </tr>
     </thead>
     <tbody>
@@ -27,9 +27,14 @@
   {% endif %}
 </div>
 
-<div class="pa4">
+<div>
   <h4>channel variation</h4>
   <div id=node-channels-history />
+</div>
+
+<div>
+  <h4>current channels</h4>
+  <div id=node-channels-bubble />
 </div>
 
 <div>
@@ -48,7 +53,7 @@
     <tbody>
     {% for channel in channels %}
       <tr class="{% if channel.close_block > 0 %}closed{% endif %}">
-        <td><a href="/node/{{ channel.peer_id }}">{% if channel.peer_name %}{{ channel.peer_name }}{% else %}{{ channel.peer_id | abbr }}{% endif %}</a></td>
+        <td data-size="{{ channel.peer_size }}"><a href="/node/{{ channel.peer_id }}">{% if channel.peer_name %}{{ channel.peer_name }}{% else %}{{ channel.peer_id | abbr }}{% endif %}</a></td>
         <td><a href="/channel/{{ channel.short_channel_id }}">{{ channel.short_channel_id }}</a></td>
         <td>{{ channel.satoshis }}</td>
         <td title="{{ 100 * (channel.open_fee + channel.close_fee) / channel.satoshis | round(method="ceil", precision=2) }}% of the channel value">{{ channel.open_fee }}{% if channel.close_block > 0 %} + {{ channel.close_fee }} = {{ channel.open_fee + channel.close_fee }}{% endif %}</td>

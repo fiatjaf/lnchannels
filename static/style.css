@@ -23,6 +23,9 @@ pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
   background-color: #333;
 }
 
+#node-channels-bubble .highcharts-point { fill: var(--gold) }
+#node-channels-bubble .highcharts-point, #node-channels-bubble .highcharts-data-label { cursor: pointer; }
+
 #search { margin: 0.8rem 12px; width: 25%; min-width: 300px; font-size: 0.8em; }
 .search-item { font-family: monospace; padding: 0.1em 0.4em; }
 .search-item:hover { background: whitesmoke; }
