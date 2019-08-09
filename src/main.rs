@@ -137,7 +137,8 @@ SELECT
   node0 AS id0,
   coalesce((SELECT alias FROM nodes WHERE pubkey = node0), '') AS name0,
   node0 AS id1,
-  coalesce((SELECT alias FROM nodes WHERE pubkey = node1), '') AS name1
+  coalesce((SELECT alias FROM nodes WHERE pubkey = node1), '') AS name1,
+  satoshis
 FROM (
   SELECT short_channel_id,
     open_block,
@@ -146,7 +147,7 @@ FROM (
       ELSE ?1
     END AS close_block,
     (close_block IS NOT NULL) AS closed,
-    node0, node1
+    node0, node1, satoshis
   FROM channels
 )x ORDER BY duration DESC LIMIT 50
     "#,
@@ -163,6 +164,7 @@ FROM (
             name0: row.get(6)?,
             id1: row.get(7)?,
             name1: row.get(8)?,
+            satoshis: row.get(9)?,
         };
         longestliving.push(channel);
     }
@@ -411,6 +413,7 @@ struct FullChannel {
 
 #[derive(Serialize)]
 struct ChannelEntry {
+    satoshis: i64,
     id0: String,
     name0: String,
     id1: String,
