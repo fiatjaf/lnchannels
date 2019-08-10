@@ -170,51 +170,41 @@ FROM (
     }
     context.insert("longestliving", &longestliving);
 
-    // nodes that open and close more channels
-    let mut mostactivity = Vec::new();
+    // all nodes with aggregate data
+    let mut allnodes = Vec::new();
     let mut q = conn.prepare(
         r#"
 SELECT
-  id,
-  coalesce((SELECT alias FROM nodes WHERE pubkey = id), '') AS name,
-  historical_total,
-  historical_total - closed_already AS open_now,
-  avg_duration
-FROM (
-  SELECT
-    id,
-    count(*) AS historical_total,
-    count(close_block) AS closed_already,
-    avg(CASE
-      WHEN close_block IS NOT NULL THEN close_block
-      ELSE ?1
-    END - open_block) AS avg_duration
-  FROM (
-    SELECT node0 AS id, *
-    FROM channels
-  UNION ALL
-    SELECT node1 AS id, *
-    FROM channels
-  )x
-  GROUP BY id
-)y
-GROUP BY id
-ORDER BY historical_total DESC
-LIMIT 50
+  pubkey,
+  coalesce(alias, ''),
+  openchannels,
+  closedchannels,
+  avg_duration,
+  avg_open_fee,
+  avg_close_fee,
+  oldestchannel,
+  capacity
+FROM nodes
+WHERE openchannels > 0
+ORDER BY openchannels DESC
     "#,
     )?;
-    let mut rows = q.query(params![last_block])?;
+    let mut rows = q.query(NO_PARAMS)?;
     while let Some(row) = rows.next()? {
-        let node = NodeActivity {
+        let node = NodeAggregate {
             id: row.get(0)?,
             name: row.get(1)?,
-            historical_total: row.get(2)?,
-            open_now: row.get(3)?,
-            avg_duration: row.get(4)?,
+            nopen: row.get(2)?,
+            nclosed: row.get(3)?,
+            avgduration: row.get(4)?,
+            avgopenfee: row.get(5)?,
+            avgclosefee: row.get(6).unwrap_or(0f64),
+            oldest: row.get(7)?,
+            cap: row.get(8)?,
         };
-        mostactivity.push(node);
+        allnodes.push(node);
     }
-    context.insert("mostactivity", &mostactivity);
+    context.insert("allnodes", &allnodes);
 
     Ok(Template::render("index", &context))
 }
@@ -445,12 +435,16 @@ struct NodeChannel {
 }
 
 #[derive(Serialize)]
-struct NodeActivity {
+struct NodeAggregate {
     id: String,
     name: String,
-    open_now: i64,
-    historical_total: i64,
-    avg_duration: f64,
+    nopen: i64,
+    nclosed: i64,
+    avgduration: f64,
+    avgopenfee: f64,
+    avgclosefee: f64,
+    oldest: i64,
+    cap: i64,
 }
 
 fn main() {

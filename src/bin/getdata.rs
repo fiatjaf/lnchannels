@@ -335,9 +335,13 @@ fn run() -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS nodes (
             pubkey TEXT PRIMARY KEY,
+            oldestchannel INTEGER NOT NULL,
             openchannels INTEGER NOT NULL,
             closedchannels INTEGER NOT NULL,
             capacity INTEGER NOT NULL,
+            avg_duration INTEGER NOT NULL,
+            avg_open_fee INTEGER NOT NULL,
+            avg_close_fee INTEGER,
             alias TEXT
         )",
         NO_PARAMS,
@@ -345,27 +349,34 @@ fn run() -> Result<()> {
     conn.execute("DELETE FROM nodes", NO_PARAMS)?;
     conn.execute(
         r#"
-        INSERT INTO nodes (pubkey, alias, openchannels, closedchannels, capacity)
-        SELECT n.pubkey, n.alias, agg.openchannels, aggc.closedchannels, agg.capacity
+        INSERT INTO nodes
+          (pubkey, alias, oldestchannel,
+            openchannels, closedchannels, capacity,
+            avg_duration, avg_open_fee, avg_close_fee)
+        SELECT
+          n.pubkey, n.alias, agg.oldestchannel,
+            open.openchannels, agg.closedchannels, open.capacity,
+            agg.avg_duration, agg.avg_open_fee, agg.avg_close_fee
         FROM nodealiases AS n
         INNER JOIN (
-          SELECT pubkey, sum(openchannels) AS openchannels, sum(capacity) AS capacity FROM (
-              SELECT node0 AS pubkey, count(*) AS openchannels, sum(satoshis) AS capacity
-              FROM channels WHERE close_block IS NULL GROUP BY node0
-            UNION ALL
-              SELECT node1 AS pubkey, count(*) AS openchannels, sum(satoshis) AS capacity
-              FROM channels WHERE close_block IS NULL GROUP BY node1
+          SELECT pubkey, count(*) AS openchannels, sum(satoshis) AS capacity FROM (
+            SELECT node0 AS pubkey, * FROM channels UNION ALL SELECT node1 AS pubkey, * FROM channels
+          ) WHERE close_block IS NULL GROUP BY pubkey
+        ) AS open ON open.pubkey = n.pubkey
+        INNER JOIN (
+          SELECT pubkey,
+            min(open_block) AS oldestchannel,
+            count(close_block) AS closedchannels,
+            avg(CASE WHEN close_block IS NOT NULL
+              THEN close_block
+              ELSE (SELECT open_block FROM channels ORDER BY open_block DESC LIMIT 1)
+            END - open_block) AS avg_duration,
+            avg(open_fee) AS avg_open_fee,
+            avg(close_fee) AS avg_close_fee
+          FROM (
+            SELECT node0 AS pubkey, * FROM channels UNION ALL SELECT node1 AS pubkey, * FROM channels
           ) GROUP BY pubkey
         ) AS agg ON agg.pubkey = n.pubkey
-        INNER JOIN (
-          SELECT pubkey, sum(closedchannels) AS closedchannels FROM (
-              SELECT node0 AS pubkey, count(*) AS closedchannels
-              FROM channels WHERE close_block IS NOT NULL GROUP BY node0
-            UNION ALL
-              SELECT node1 AS pubkey, count(*) AS closedchannels
-              FROM channels WHERE close_block IS NOT NULL GROUP BY node1
-          ) GROUP BY pubkey
-        ) AS aggc ON aggc.pubkey = n.pubkey
         GROUP BY n.pubkey
         ORDER BY n.last_seen
         "#,

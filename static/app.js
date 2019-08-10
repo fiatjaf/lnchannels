@@ -4,10 +4,21 @@
 const H = window.Highcharts
 const AutoComplete = window.autoComplete
 const fetch = window.fetch
+const isMobile = window.isMobile
+
 const plotOptions = {
   series: {
     turboThreshold: 1,
     marker: {enabled: false}
+  }
+}
+const optimizedPlotOptions = {
+  series: {
+    turboThreshold: 1,
+    animation: false,
+    marker: {enabled: false, states: {hover: {enabled: false}}},
+    states: {hover: {halo: {size: 0}}},
+    enableMouseTracking: false
   }
 }
 
@@ -98,6 +109,71 @@ if (document.getElementById('open-close')) {
     ],
     plotOptions
   })
+
+  if (!isMobile.any) {
+    window.addEventListener('load', () => {
+      H.chart('node-breakdown', {
+        chart: {
+          type: 'spline',
+          parallelCoordinates: true,
+          parallelAxes: {lineWidth: 2}
+        },
+        title: {text: ''},
+        plotOptions: optimizedPlotOptions,
+        xAxis: {
+          categories: [
+            'Oldest channel (block)',
+            'Average channel size',
+            'Open channels',
+            'Average open fee',
+            'Capacity',
+            'Average channel duration (blocks)',
+            'Close rate',
+            'Average close fee',
+            'Closed channels'
+          ],
+          offset: 10
+        },
+        yAxis: [
+          {type: 'linear'},
+          {type: 'linear', labels: {format: '{value} sat'}},
+          {type: 'logarithmic'},
+          {type: 'logarithmic', labels: {format: '{value} sat'}, max: 200000},
+          {type: 'logarithmic', labels: {format: '{value} sat'}},
+          {type: 'linear'},
+          {type: 'logarithmic', labels: {format: '{value}%'}, min: 1},
+          {type: 'logarithmic', labels: {format: '{value} sat'}},
+          {type: 'logarithmic'}
+        ],
+        colors: ['var(--transparent-line)'],
+        series: window.allnodes
+          .filter(x => Math.random() < 0.5)
+          .map(
+            ({
+              nopen,
+              nclosed,
+              avgduration,
+              avgopenfee,
+              avgclosefee,
+              oldest,
+              cap
+            }) => ({
+              data: [
+                oldest,
+                cap / nopen,
+                nopen,
+                avgopenfee,
+                cap,
+                avgduration,
+                (100 * nclosed) / nopen || 0.00001,
+                avgclosefee || null,
+                nclosed || null
+              ]
+            })
+          )
+      })
+    })
+  }
 }
 
 // -- node.html

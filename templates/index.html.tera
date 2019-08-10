@@ -1,36 +1,41 @@
 {% extends "base" %}
 {% block body %}
-<div class="pa4">
+<div>
   <div id=open-close />
 </div>
-<div class="pa4 overflow-auto">
-  <h4>nodes with most channel activity</h4>
-  <table id=node-history class="f6 w-100 mw8 center">
+<div>
+  <div id=node-breakdown />
+</div>
+<div>
+  <h4>some nodes</h4>
+  <table id=all-nodes>
     <thead>
-      <tr class="tr">
+      <tr>
         <th>node</th>
         <th>open channels now</th>
         <th>total historical channels</th>
+        <th>close rate (%)</th>
         <th>average channel duration (blocks)</th>
       </tr>
     </thead>
     <tbody>
-    {% for node in mostactivity %}
+    {% for node in allnodes | slice(end=100) %}
       <tr>
         <td><a href="/node/{{ node.id }}">{% if node.name %}{{ node.name }}{% else %}{{ node.id | abbr }}{% endif %}</a></td>
-        <td>{{ node.open_now }}</td>
-        <td>{{ node.historical_total }}</td>
-        <td>{{ node.avg_duration | round }}</td>
+        <td>{{ node.nopen}}</td>
+        <td>{{ node.nopen + node.nclosed }}</td>
+        <td>{{ 100 * node.nclosed / node.nopen | round }}</td>
+        <td>{{ node.avgduration | round }}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
-<div class="pa4 overflow-auto">
+<div>
   <h4>longest living channels</h4>
-  <table id=longest-living class="f6 w-100 mw8 center">
+  <table id=longest-living>
     <thead>
-      <tr class="tr">
+      <tr>
         <th>short_channel_id</th>
         <th>satoshis</th>
         <th>opened on block</th>
@@ -62,5 +67,6 @@ window.total = {{ total | safe | json_encode }}
 window.capacity = {{ capacity | safe | json_encode }}
 window.fee_total = {{ fee_total | safe | json_encode }}
 window.fee_average = {{ fee_average | safe | json_encode }}
+window.allnodes = {{ allnodes | safe | json_encode }}
 </script>
 {% endblock body %}

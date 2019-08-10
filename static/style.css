@@ -4,6 +4,7 @@
   --blue: #7cb5ec;
   --gold: #ffd85a;
   --orange: #fda23c;
+  --transparent-line: rgba(230, 141, 141, 0.03);
 }
 
 main { margin: 0 1rem; }
