@@ -23,6 +23,7 @@ pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
   bottom: 0;
   background-color: #333;
 }
+.highcharts-credits { display: none; }
 
 #node-channels-bubble .highcharts-point { fill: var(--gold) }
 #node-channels-bubble .highcharts-point, #node-channels-bubble .highcharts-data-label { cursor: pointer; }
