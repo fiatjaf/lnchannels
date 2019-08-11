@@ -1,9 +1,9 @@
 {% extends "base" %}
 {% block title %}node "{{ nodename }}" | {% endblock title %}
-{% block description %}Historical data and charts about the channels of the Lightning Network node '{{ nodename }}'.{% endblock description %}
+{% block description %}{{node.id | abbr}}: {{ node.nopen }} channels, total capacity of {{ node.cap }} satoshis{% endblock description %}
 
 {% block body %}
-<h1>node <pre class="id">{{ node }}</pre></h1>
+<h1>node <pre class="id">{{ node.id }}</pre></h1>
 
 <div>
   {% if aliases %}

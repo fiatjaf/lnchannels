@@ -191,18 +191,7 @@ ORDER BY openchannels DESC
     )?;
     let mut rows = q.query(NO_PARAMS)?;
     while let Some(row) = rows.next()? {
-        let node = NodeAggregate {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            nopen: row.get(2)?,
-            nclosed: row.get(3)?,
-            avgduration: row.get(4)?,
-            avgopenfee: row.get(5)?,
-            avgclosefee: row.get(6).unwrap_or(0f64),
-            oldest: row.get(7)?,
-            cap: row.get(8)?,
-        };
-        allnodes.push(node);
+        allnodes.push(row_to_node_aggregate(row)?);
     }
     context.insert("allnodes", &allnodes);
 
@@ -215,7 +204,24 @@ fn show_node(nodeid: String) -> Result<Template> {
     let conn = Connection::open("channels.db")?;
 
     let pubkey = nodeid.to_lowercase();
-    context.insert("node", &pubkey);
+
+    let node: NodeAggregate = conn.query_row_and_then(
+        r#"
+SELECT
+  pubkey,
+  coalesce(alias, ''),
+  openchannels,
+  closedchannels,
+  avg_duration,
+  avg_open_fee,
+  avg_close_fee,
+  oldestchannel,
+  capacity
+FROM nodes WHERE pubkey = ?1"#,
+        params![pubkey],
+        row_to_node_aggregate,
+    )?;
+    context.insert("node", &node);
 
     let mut aliases = Vec::new();
     let mut q = conn.prepare(
@@ -468,4 +474,19 @@ fn main() {
 fn abbreviate(long: String) -> String {
     let last = long.len() - 4;
     format!("{}…{}", &long[..4], &long[last..])
+}
+
+fn row_to_node_aggregate(row: &rusqlite::Row) -> Result<NodeAggregate> {
+    let nodeagg = NodeAggregate {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        nopen: row.get(2)?,
+        nclosed: row.get(3)?,
+        avgduration: row.get(4)?,
+        avgopenfee: row.get(5)?,
+        avgclosefee: row.get(6).unwrap_or(0f64),
+        oldest: row.get(7)?,
+        cap: row.get(8)?,
+    };
+    Ok(nodeagg)
 }
