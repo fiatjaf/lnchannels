@@ -136,7 +136,7 @@ SELECT
   closed,
   node0 AS id0,
   coalesce((SELECT alias FROM nodes WHERE pubkey = node0), '') AS name0,
-  node0 AS id1,
+  node1 AS id1,
   coalesce((SELECT alias FROM nodes WHERE pubkey = node1), '') AS name1,
   satoshis
 FROM (
