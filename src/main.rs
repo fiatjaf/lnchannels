@@ -28,22 +28,17 @@ mod errors {
 
 use errors::*;
 
+// first block we may say we have meaningful data from
+static FIRST_BLOCK: i64 = 578600;
+
 #[get("/")]
 fn index() -> Result<Template> {
+    // first block we may say we have meaningful data from
     let mut context = Context::new();
     let conn = Connection::open("channels.db")?;
 
-    // first block we may say we have meaningful data from
-    let first_block: i64 = 578600;
-
-    // last block we have data from
-    let last_block: i64 = conn.query_row(
-        "SELECT open_block FROM channels ORDER BY open_block DESC LIMIT 1",
-        NO_PARAMS,
-        |row| row.get(0),
-    )?;
-
-    println!("{}---{}", first_block, last_block);
+    let stats = get_stats()?;
+    context.insert("stats", &stats);
 
     // channel variation chart
     let mut blocks: Vec<i64> = Vec::new();
@@ -90,7 +85,7 @@ GROUP BY blockgroup
 ORDER BY blockgroup
     "#,
     )?;
-    let mut rows = q.query(params![first_block])?;
+    let mut rows = q.query(params![FIRST_BLOCK])?;
     while let Some(row) = rows.next()? {
         blocks.push(row.get(0)?);
         let opens: i64 = row.get(1)?;
@@ -152,7 +147,7 @@ FROM (
 )x ORDER BY duration DESC LIMIT 50
     "#,
     )?;
-    let mut rows = q.query(params![last_block])?;
+    let mut rows = q.query(params![stats.last_block])?;
     while let Some(row) = rows.next()? {
         let channel = ChannelEntry {
             short_channel_id: row.get(0)?,
@@ -202,6 +197,9 @@ ORDER BY openchannels DESC
 fn show_node(nodeid: String) -> Result<Template> {
     let mut context = Context::new();
     let conn = Connection::open("channels.db")?;
+
+    let stats = get_stats()?;
+    context.insert("stats", &stats);
 
     let pubkey = nodeid.to_lowercase();
 
@@ -290,6 +288,10 @@ ORDER BY open_block DESC
 fn show_channel(short_channel_id: String) -> Result<Template> {
     let mut context = Context::new();
     let conn = Connection::open("channels.db")?;
+
+    let stats = get_stats()?;
+    context.insert("stats", &stats);
+    context.insert("FIRST_BLOCK", &FIRST_BLOCK);
 
     let channel = conn.query_row(
         r#"
@@ -453,6 +455,23 @@ struct NodeAggregate {
     cap: i64,
 }
 
+#[derive(Serialize)]
+struct GlobalStats {
+    last_block: i64,
+    max_channel_duration: i64,
+    max_channel_open_fee: i64,
+    max_channel_close_fee: i64,
+    max_channel_satoshis: i64,
+    max_node_capacity: i64,
+    max_node_openchannels: i64,
+    max_node_closedchannels: i64,
+    max_node_allchannels: i64,
+    max_node_close_rate: i64,
+    max_node_average_duration: i64,
+    max_node_average_open_fee: i64,
+    max_node_average_close_fee: i64,
+}
+
 fn main() {
     rocket::ignite()
         .attach(Template::custom(|engines| {
@@ -489,4 +508,26 @@ fn row_to_node_aggregate(row: &rusqlite::Row) -> Result<NodeAggregate> {
         cap: row.get(8)?,
     };
     Ok(nodeagg)
+}
+
+fn get_stats() -> Result<GlobalStats> {
+    let conn = Connection::open("channels.db")?;
+    let globalstats = conn.query_row("SELECT * FROM globalstats", NO_PARAMS, |row| {
+        Ok(GlobalStats {
+            last_block: row.get(0)?,
+            max_channel_duration: row.get(1)?,
+            max_channel_open_fee: row.get(2)?,
+            max_channel_close_fee: row.get(3)?,
+            max_channel_satoshis: row.get(4)?,
+            max_node_capacity: row.get(5)?,
+            max_node_openchannels: row.get(6)?,
+            max_node_closedchannels: row.get(7)?,
+            max_node_allchannels: row.get(8)?,
+            max_node_close_rate: row.get(9)?,
+            max_node_average_duration: row.get(10)?,
+            max_node_average_open_fee: row.get(11)?,
+            max_node_average_close_fee: row.get(12)?,
+        })
+    })?;
+    Ok(globalstats)
 }

@@ -358,11 +358,16 @@ fn run() -> Result<()> {
             max_node_closedchannels INTEGER NOT NULL,
             max_node_allchannels INTEGER NOT NULL,
             max_node_close_rate INTEGER NOT NULL,
+            max_node_average_duration INTEGER NOT NULL,
+            max_node_average_open_fee INTEGER NOT NULL,
+            max_node_average_close_fee INTEGER NOT NULL
         )",
         NO_PARAMS,
     )?;
 
     conn.execute("DELETE FROM nodes", NO_PARAMS)?;
+    conn.execute("DELETE FROM globalstats", NO_PARAMS)?;
+
     conn.execute(
         r#"
         INSERT INTO nodes
@@ -395,6 +400,59 @@ fn run() -> Result<()> {
         ) AS agg ON agg.pubkey = n.pubkey
         GROUP BY n.pubkey
         ORDER BY n.last_seen
+        "#,
+        NO_PARAMS,
+    )?;
+
+    conn.execute(
+        r#"
+        WITH last_block AS (
+          SELECT max(b) AS last_block
+          FROM (
+              SELECT max(open_block) AS b FROM channels
+            UNION ALL
+              SELECT max(close_block) AS b FROM channels
+          )
+        )
+
+        INSERT INTO globalstats
+        SELECT
+          (SELECT last_block FROM last_block), -- last_block
+          channels.max_duration      , -- max_channel_duration
+          channels.max_open_fee      , -- max_channel_open_fee
+          channels.max_close_fee     , -- max_channel_close_fee
+          channels.max_satoshis      , -- max_channel_satoshis
+          nodes.max_capacity         , -- max_node_capacity
+          nodes.max_openchannels     , -- max_node_openchannels
+          nodes.max_closedchannels   , -- max_node_closedchannels
+          nodes.max_allchannels      , -- max_node_allchannels
+          nodes.max_close_rate       , -- max_node_close_rate
+          nodes.max_average_duration , -- max_node_average_duration
+          nodes.max_average_open_fee , -- max_node_average_open_fee
+          nodes.max_average_close_fee  -- max_node_average_close_fee
+        FROM (
+          SELECT
+            max(CASE
+              WHEN close_block IS NOT NULL THEN close_block
+              ELSE (SELECT last_block FROM last_block)
+            END - open_block) AS max_duration,
+            max(open_fee) AS max_open_fee,
+            max(close_fee) AS max_close_fee,
+            max(satoshis) AS max_satoshis
+          FROM channels
+        ) AS channels
+        JOIN (
+          SELECT
+            max(capacity) AS max_capacity,
+            max(openchannels) AS max_openchannels,
+            max(closedchannels) AS max_closedchannels,
+            max(openchannels + closedchannels) AS max_allchannels,
+            max(closedchannels / openchannels) AS max_close_rate,
+            max(avg_duration) AS max_average_duration,
+            max(avg_open_fee) AS max_average_open_fee,
+            max(avg_close_fee) AS max_average_close_fee
+          FROM nodes
+        ) AS nodes
         "#,
         NO_PARAMS,
     )?;
