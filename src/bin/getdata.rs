@@ -346,6 +346,22 @@ fn run() -> Result<()> {
         )",
         NO_PARAMS,
     )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS globalstats (
+            last_block INTEGER NOT NULL,
+            max_channel_duration INTEGER NOT NULL,
+            max_channel_open_fee INTEGER NOT NULL,
+            max_channel_close_fee INTEGER NOT NULL,
+            max_channel_satoshis INTEGER NOT NULL,
+            max_node_capacity INTEGER NOT NULL,
+            max_node_openchannels INTEGER NOT NULL,
+            max_node_closedchannels INTEGER NOT NULL,
+            max_node_allchannels INTEGER NOT NULL,
+            max_node_close_rate INTEGER NOT NULL,
+        )",
+        NO_PARAMS,
+    )?;
+
     conn.execute("DELETE FROM nodes", NO_PARAMS)?;
     conn.execute(
         r#"
