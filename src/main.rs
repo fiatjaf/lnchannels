@@ -39,6 +39,7 @@ fn index() -> Result<Template> {
 
     let stats = get_stats()?;
     context.insert("stats", &stats);
+    context.insert("first_block", &FIRST_BLOCK);
 
     // channel variation chart
     let mut blocks: Vec<i64> = Vec::new();
@@ -200,6 +201,7 @@ fn show_node(nodeid: String) -> Result<Template> {
 
     let stats = get_stats()?;
     context.insert("stats", &stats);
+    context.insert("first_block", &FIRST_BLOCK);
 
     let pubkey = nodeid.to_lowercase();
 
@@ -466,10 +468,10 @@ struct GlobalStats {
     max_node_openchannels: i64,
     max_node_closedchannels: i64,
     max_node_allchannels: i64,
-    max_node_close_rate: i64,
-    max_node_average_duration: i64,
-    max_node_average_open_fee: i64,
-    max_node_average_close_fee: i64,
+    max_node_close_rate: f64,
+    max_node_average_duration: f64,
+    max_node_average_open_fee: f64,
+    max_node_average_close_fee: f64,
 }
 
 fn main() {
