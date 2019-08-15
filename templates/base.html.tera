@@ -10,7 +10,7 @@
 <link rel=stylesheet href=/static/style.css>
 <script src=https://cdnjs.cloudflare.com/ajax/libs/highcharts/7.1.2/highcharts.js></script>
 <script src=https://cdnjs.cloudflare.com/ajax/libs/highcharts/7.1.2/highcharts-more.js></script>
-<script src=https://code.highcharts.com/modules/parallel-coordinates.js></script>
+<script src=https://cdnjs.cloudflare.com/ajax/libs/highcharts/7.1.2/modules/parallel-coordinates.js></script>
 <script src=https://cdnjs.cloudflare.com/ajax/libs/JavaScript-autoComplete/1.0.4/auto-complete.js></script>
 <script src=https://cdnjs.cloudflare.com/ajax/libs/ismobilejs/0.4.1/isMobile.min.js></script>
 

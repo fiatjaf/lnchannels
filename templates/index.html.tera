@@ -1,13 +1,15 @@
 {% extends "base" %}
 {% block body %}
 <div>
+  <h4>history of the open network</h4>
   <div id=open-close />
 </div>
 <div>
+  <h4>node breakdown by attribute</h4>
   <div id=node-breakdown />
 </div>
 <div>
-  <h4>some nodes</h4>
+  <h4>some of the biggest nodes</h4>
   <table id=all-nodes>
     <thead>
       <tr>
