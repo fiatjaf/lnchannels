@@ -25,23 +25,35 @@ const USAGE: &'static str = "
 getdata
 
 Usage:
-  getdata [--skiplistchannels] [--skiplistnodes] [--justcheckcloses] [--justenrich] [--justupdatealiases]
+  getdata [--all] [--listchannels] [--listnodes] [--checkcloses] [--enrich] [--materialize]
 
 Options:
-  --skiplistchannels      Skips the `listchannels` part and (re-)inserting all channels in the database.
-  --skiplistnodes         Skips the `listnodes` part and (re-)inserting all node aliases in the database.
-  --justupdatealiases     Skips everything but updating node aliases.
-  --justcheckcloses       Skips everything but checking channels closes (developer usage only).
-  --justenrich            Skips everything but fetching time and fee from transactions (developer usage only).
+  --listchannels    fetches channels from the lightning network and save them
+  --listnodes       fetches nodes from the lightning network and save their aliases
+  --checkcloses     uses a third-party API to check if channels are closed
+  --enrich          uses a local blockchain to enrich the channel transactions data
+  --materialize     reset the materialized views
+  --all             do all steps (default)
+  --skiplightning   doesn't fetch channels or nodes
 ";
 
 #[derive(Deserialize)]
 struct Args {
-    flag_skiplistchannels: bool,
-    flag_skiplistnodes: bool,
-    flag_justupdatealiases: bool,
-    flag_justcheckcloses: bool,
-    flag_justenrich: bool,
+    flag_listchannels: bool,
+    flag_listnodes: bool,
+    flag_checkcloses: bool,
+    flag_enrich: bool,
+    flag_materialize: bool,
+    flag_all: bool,
+    flag_skiplightning: bool,
+}
+
+struct StepsToRun {
+    listchannels: bool,
+    listnodes: bool,
+    checkcloses: bool,
+    enrich: bool,
+    materialize: bool,
 }
 
 quick_main! {run}
@@ -50,6 +62,31 @@ fn run() -> Result<()> {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
+
+    let mut all = args.flag_all;
+    if !all
+        && !args.flag_skiplightning
+        && !args.flag_listchannels
+        && !args.flag_listnodes
+        && !args.flag_checkcloses
+        && !args.flag_enrich
+        && !args.flag_materialize
+    {
+        all = true;
+    }
+
+    let mut run = StepsToRun {
+        listchannels: args.flag_all || args.flag_listchannels,
+        listnodes: args.flag_all || args.flag_listnodes,
+        checkcloses: args.flag_all || args.flag_checkcloses,
+        enrich: args.flag_all || args.flag_enrich,
+        materialize: args.flag_all || args.flag_materialize,
+    };
+
+    if !all && args.flag_skiplightning {
+        run.listchannels = false;
+        run.listnodes = false;
+    }
 
     println!("creating sqlite database");
     let conn = Connection::open("channels.db").chain_err(|| "failed to open database")?;
@@ -113,11 +150,7 @@ fn run() -> Result<()> {
     .chain_err(|| "failed to create index")?;
 
     let mut i = 0;
-    if !args.flag_justcheckcloses
-        && !args.flag_justenrich
-        && !args.flag_justupdatealiases
-        && !args.flag_skiplistchannels
-    {
+    if run.listchannels {
         let channels = getchannels()?;
         println!("inserting {} channels", channels.len());
 
@@ -150,7 +183,7 @@ fn run() -> Result<()> {
         }
     }
 
-    if !args.flag_justcheckcloses && !args.flag_justenrich && !args.flag_skiplistnodes {
+    if run.listnodes {
         let nodes = getnodes()?;
         println!("inserting {} aliases", nodes.len());
 
@@ -199,7 +232,7 @@ fn run() -> Result<()> {
         }
     }
 
-    if !args.flag_justcheckcloses && !args.flag_justenrich && !args.flag_justupdatealiases {
+    if run.enrich {
         println!("getting blockchain data");
         i = 0;
         let mut q =
@@ -229,7 +262,7 @@ fn run() -> Result<()> {
         }
     }
 
-    if !args.flag_justenrich && !args.flag_justupdatealiases {
+    if run.checkcloses {
         println!("inspecting channels that may have been closed");
         i = 0;
         let mut q = conn.prepare(
@@ -266,7 +299,7 @@ fn run() -> Result<()> {
         }
     }
 
-    if !args.flag_justcheckcloses && !args.flag_justupdatealiases {
+    if run.enrich {
         println!("adding more transaction data to closed channels");
         i = 0;
 
@@ -332,8 +365,9 @@ fn run() -> Result<()> {
     }
 
     // create materialized views
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS nodes (
+    if run.materialize {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS nodes (
             pubkey TEXT PRIMARY KEY,
             oldestchannel INTEGER NOT NULL,
             openchannels INTEGER NOT NULL,
@@ -344,10 +378,10 @@ fn run() -> Result<()> {
             avg_close_fee INTEGER,
             alias TEXT
         )",
-        NO_PARAMS,
-    )?;
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS globalstats (
+            NO_PARAMS,
+        )?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS globalstats (
             last_block INTEGER NOT NULL,
             max_channel_duration INTEGER NOT NULL,
             max_channel_open_fee INTEGER NOT NULL,
@@ -362,13 +396,13 @@ fn run() -> Result<()> {
             max_node_average_open_fee INTEGER NOT NULL,
             max_node_average_close_fee INTEGER NOT NULL
         )",
-        NO_PARAMS,
-    )?;
+            NO_PARAMS,
+        )?;
 
-    conn.execute("DELETE FROM nodes", NO_PARAMS)?;
-    conn.execute("DELETE FROM globalstats", NO_PARAMS)?;
+        conn.execute("DELETE FROM nodes", NO_PARAMS)?;
+        conn.execute("DELETE FROM globalstats", NO_PARAMS)?;
 
-    conn.execute(
+        conn.execute(
         r#"
         INSERT INTO nodes
           (pubkey, alias, oldestchannel,
@@ -404,8 +438,8 @@ fn run() -> Result<()> {
         NO_PARAMS,
     )?;
 
-    conn.execute(
-        r#"
+        conn.execute(
+            r#"
         WITH last_block AS (
           SELECT max(b) AS last_block
           FROM (
@@ -454,8 +488,9 @@ fn run() -> Result<()> {
           FROM nodes
         ) AS nodes
         "#,
-        NO_PARAMS,
-    )?;
+            NO_PARAMS,
+        )?;
+    }
 
     Ok(())
 }
