@@ -111,11 +111,12 @@ fn run() -> Result<()> {
             node1 TEXT NOT NULL,
 
             satoshis INTEGER,
+            last_update INTEGER,
             last_seen DATETIME NOT NULL
         )",
         NO_PARAMS,
     )
-    .chain_err(|| "failed to create table")?;
+    .chain_err(|| "failed to create table channels")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS nodealiases (
@@ -126,7 +127,24 @@ fn run() -> Result<()> {
         )",
         NO_PARAMS,
     )
-    .chain_err(|| "failed to create table")?;
+    .chain_err(|| "failed to create table nodealiases")?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS channelpolicies (
+            short_channel_id TEXT NOT NULL,
+            direction INTEGER NOT NULL, -- 1 means from node0 to node1 and vice-versa
+
+            base_fee_millisatoshi INTEGER NOT NULL,
+            fee_per_millionth INTEGER NOT NULL,
+            delay INTEGER NOT NULL,
+            
+            update_time INTEGER NOT NULL,
+
+            UNIQUE(short_channel_id, direction, base_fee_millisatoshi, fee_per_millionth, delay)
+        )",
+        NO_PARAMS,
+    )
+    .chain_err(|| "failed to create table channelpolicies")?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id)",
@@ -154,32 +172,71 @@ fn run() -> Result<()> {
         let channels = getchannels()?;
         println!("inserting {} channels", channels.len());
 
-        for channel in channels.iter() {
-            let (node0, node1) = if channel.source < channel.destination {
-                (&channel.source, &channel.destination)
-            } else {
-                (&channel.destination, &channel.source)
-            };
+        let mut last_inserted = "";
 
-            conn.execute(
+        for channel in channels.iter() {
+            if last_inserted != channel.short_channel_id {
+                i += 1;
+
+                // insert into channel table
+                let (node0, node1) = if channel.source < channel.destination {
+                    (&channel.source, &channel.destination)
+                } else {
+                    (&channel.destination, &channel.source)
+                };
+
+                conn.execute(
                 "INSERT INTO channels
-                    (short_channel_id, node0, node1, satoshis, last_seen)
-                VALUES (?1, ?2, ?3, ?4, datetime('now'))
-                ON CONFLICT (short_channel_id) DO UPDATE SET last_seen = excluded.last_seen",
+                    (short_channel_id, node0, node1, satoshis, last_update, last_seen)
+                VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
+                ON CONFLICT (short_channel_id)
+                    DO UPDATE SET last_seen = excluded.last_seen, last_update = excluded.last_update",
                 &[
                     &channel.short_channel_id as &dyn ToSql,
                     node0 as &dyn ToSql,
                     node1 as &dyn ToSql,
                     &channel.satoshis as &dyn ToSql,
+                    &channel.last_update as &dyn ToSql,
                 ],
             )
             .chain_err(|| "failed to insert")?;
 
+                println!(
+                    "  {}: inserted {}-[{}]-{} at {}",
+                    &i, node0, &channel.satoshis, node1, &channel.short_channel_id
+                );
+
+                last_inserted = &channel.short_channel_id;
+            }
+
+            // now update channel policy
+            let towards = if channel.source < channel.destination {
+                1
+            } else {
+                0
+            };
+
+            conn.execute(
+            "INSERT INTO channelpolicies
+                (short_channel_id, direction, base_fee_millisatoshi, fee_per_millionth, delay, update_time)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT (short_channel_id, direction, base_fee_millisatoshi, fee_per_millionth, delay) DO NOTHING
+            ",
+                &[
+                    &channel.short_channel_id as &dyn ToSql,
+                    &towards as &dyn ToSql,
+                    &channel.base_fee_millisatoshi as &dyn ToSql,
+                    &channel.fee_per_millionth as &dyn ToSql,
+                    &channel.delay as &dyn ToSql,
+                    &channel.last_update as &dyn ToSql,
+                ],
+            )
+            .chain_err(|| "failed to add policy")?;
+
             println!(
-                "  {}: inserted {}-[{}]-{} at {}",
-                &i, node0, &channel.satoshis, node1, &channel.short_channel_id
+                "    {} {}: updated policy ({})->({})",
+                &i, &channel.short_channel_id, &channel.source, &channel.destination
             );
-            i += 1;
         }
     }
 
@@ -668,6 +725,10 @@ mod lightning {
         pub destination: String,
         pub short_channel_id: String,
         pub satoshis: i64,
+        pub last_update: i64,
+        pub base_fee_millisatoshi: i64,
+        pub fee_per_millionth: i64,
+        pub delay: i64,
     }
 
     #[derive(Deserialize)]
