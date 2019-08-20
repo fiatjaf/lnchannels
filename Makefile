@@ -1,4 +1,4 @@
-target/release/lnchannels: src/main.rs src/bin/getdata.rs
+target/release/lnchannels: src/bin/server.rs src/bin/getdata.rs
 	cargo build --release
 
 deploy: target/release/lnchannels templates static channels.db
