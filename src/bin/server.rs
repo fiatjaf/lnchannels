@@ -297,15 +297,15 @@ fn show_channel(short_channel_id: String) -> Result<Template> {
 
     let channel = conn.query_row(
         r#"
-        SELECT
-            open_block, open_fee, open_transaction, open_time, 
-            close_block, close_fee, close_transaction, close_time,
-            address, node0, node1, satoshis,
-            short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, '')
-        FROM channels
-        LEFT OUTER JOIN nodes AS n0 ON n0.pubkey = node0
-        LEFT OUTER JOIN nodes AS n1 ON n1.pubkey = node1
-        WHERE short_channel_id = ?1
+SELECT
+    open_block, open_fee, open_transaction, open_time, 
+    close_block, close_fee, close_transaction, close_time,
+    address, node0, node1, satoshis,
+    short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, '')
+FROM channels
+LEFT OUTER JOIN nodes AS n0 ON n0.pubkey = node0
+LEFT OUTER JOIN nodes AS n1 ON n1.pubkey = node1
+WHERE short_channel_id = ?1
         "#,
         params![short_channel_id],
         |row| {
@@ -329,6 +329,35 @@ fn show_channel(short_channel_id: String) -> Result<Template> {
         },
     )?;
     context.insert("channel", &channel);
+
+    let mut upwardpolicies = Vec::new();
+    let mut downwardpolicies = Vec::new();
+    let mut query = conn.prepare(
+        r#"
+SELECT direction, base_fee_millisatoshi, fee_per_millionth, delay, update_time
+FROM channelpolicies
+WHERE short_channel_id = ?1
+        "#,
+    )?;
+    let mut rows = query.query(params![short_channel_id])?;
+    while let Some(row) = rows.next()? {
+        let policy = ChannelPolicy {
+            base_fee_millisatoshi: row.get(1)?,
+            fee_per_millionth: row.get(2)?,
+            delay: row.get(3)?,
+            update_time: row.get(4)?,
+        };
+
+        let direction: i64 = row.get(0)?;
+        if direction == 1 {
+            upwardpolicies.push(policy);
+        } else {
+            downwardpolicies.push(policy);
+        }
+    }
+
+    context.insert("upwardpolicies", &upwardpolicies);
+    context.insert("downwardpolicies", &downwardpolicies);
 
     Ok(Template::render("channel", &context))
 }
@@ -423,6 +452,14 @@ struct ChannelEntry {
     close_block: i64,
     duration: i64,
     closed: bool,
+}
+
+#[derive(Serialize)]
+struct ChannelPolicy {
+    base_fee_millisatoshi: i64,
+    fee_per_millionth: i64,
+    delay: i64,
+    update_time: i64,
 }
 
 #[derive(Serialize)]
