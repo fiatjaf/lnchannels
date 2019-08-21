@@ -48,6 +48,7 @@
         <th>fee paid</th>
         <th>open</th>
         <th>close</th>
+        <th>outgoing fee policy</th>
       </tr>
     </thead>
     <tbody>
@@ -59,6 +60,7 @@
         <td title="{{ 100 * (channel.open_fee + channel.close_fee) / channel.satoshis | round(method="ceil", precision=2) }}% of the channel value">{{ channel.open_fee }}{% if channel.close_block > 0 %} + {{ channel.close_fee }} = {{ channel.open_fee + channel.close_fee }}{% endif %}</td>
         <td>{{ channel.open_block }}</td>
         <td>{% if channel.close_block > 0 %}{{ channel.close_block }}{% endif %}</td>
+        <td>{{ channel.fee_per_millionth / 1000 }}% (min {{ channel.base_fee_millisatoshi / 1000 }} sat); delay of {{ channel.delay }}</td>
       </tr>
     {% endfor %}
     </tbody>

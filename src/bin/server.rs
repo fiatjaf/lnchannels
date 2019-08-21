@@ -217,7 +217,8 @@ SELECT
   avg_close_fee,
   oldestchannel,
   capacity
-FROM nodes WHERE pubkey = ?1"#,
+FROM nodes WHERE pubkey = ?1
+        "#,
         params![pubkey],
         row_to_node_aggregate,
     )?;
@@ -246,14 +247,22 @@ ORDER BY first_seen DESC
     let mut q = conn.prepare(
         r#"
 SELECT
-  short_channel_id,
+  channels.short_channel_id,
   CASE WHEN node0 = ?1 THEN node1 ELSE node0 END AS peer_id,
   coalesce((SELECT alias FROM nodes WHERE pubkey = (CASE WHEN node0 = ?1 THEN node1 ELSE node0 END)), '') AS peer_name,
   coalesce((SELECT capacity FROM nodes WHERE pubkey = (CASE WHEN node0 = ?1 THEN node1 ELSE node0 END)), 0) AS peer_size,
   open_block, open_fee,
   close_block, close_fee,
-  satoshis
+  satoshis,
+  base_fee_millisatoshi, fee_per_millionth, delay
 FROM channels
+LEFT OUTER JOIN (
+  SELECT * FROM channelpolicies
+  GROUP BY short_channel_id, direction
+  ORDER BY short_channel_id, direction, update_time DESC
+) AS policy
+  ON policy.short_channel_id = channels.short_channel_id
+ AND policy.direction = CASE WHEN node0 = ?1 THEN 1 ELSE 0 END
 WHERE node0 = ?1 OR node1 = ?1
 ORDER BY open_block DESC
     "#,
@@ -270,6 +279,9 @@ ORDER BY open_block DESC
             close_block: row.get(6).unwrap_or(0),
             close_fee: row.get(7).unwrap_or(0),
             satoshis: row.get(8)?,
+            base_fee_millisatoshi: row.get(9).unwrap_or(0),
+            fee_per_millionth: row.get(10).unwrap_or(0),
+            delay: row.get(11).unwrap_or(0),
         };
         channels.push(channel);
     }
@@ -479,6 +491,9 @@ struct NodeChannel {
     close_block: i64,
     close_fee: i64,
     satoshis: i64,
+    base_fee_millisatoshi: i64,
+    fee_per_millionth: i64,
+    delay: i64,
 }
 
 #[derive(Serialize)]
