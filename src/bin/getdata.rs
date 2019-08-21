@@ -11,6 +11,7 @@ extern crate error_chain;
 
 use docopt::Docopt;
 use rusqlite::types::ToSql;
+use rusqlite::OptionalExtension;
 use rusqlite::{Connection, NO_PARAMS};
 use serde::Deserialize;
 use std::env;
@@ -130,7 +131,7 @@ fn run() -> Result<()> {
     .chain_err(|| "failed to create table nodealiases")?;
 
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS channelpolicies (
+        "CREATE TABLE IF NOT EXISTS policies (
             short_channel_id TEXT NOT NULL,
             direction INTEGER NOT NULL, -- 1 means from node0 to node1 and vice-versa
 
@@ -138,13 +139,11 @@ fn run() -> Result<()> {
             fee_per_millionth INTEGER NOT NULL,
             delay INTEGER NOT NULL,
             
-            update_time INTEGER NOT NULL,
-
-            UNIQUE(short_channel_id, direction, base_fee_millisatoshi, fee_per_millionth, delay)
+            update_time INTEGER NOT NULL
         )",
         NO_PARAMS,
     )
-    .chain_err(|| "failed to create table channelpolicies")?;
+    .chain_err(|| "failed to create table policies")?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id)",
@@ -186,11 +185,11 @@ fn run() -> Result<()> {
                 };
 
                 conn.execute(
-                "INSERT INTO channels
-                    (short_channel_id, node0, node1, satoshis, last_update, last_seen)
-                VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
-                ON CONFLICT (short_channel_id)
-                    DO UPDATE SET last_seen = excluded.last_seen, last_update = excluded.last_update",
+                    "INSERT INTO channels
+                        (short_channel_id, node0, node1, satoshis, last_update, last_seen)
+                    VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
+                    ON CONFLICT (short_channel_id)
+                        DO UPDATE SET last_seen = excluded.last_seen, last_update = excluded.last_update",
                 &[
                     &channel.short_channel_id as &dyn ToSql,
                     node0 as &dyn ToSql,
@@ -200,7 +199,6 @@ fn run() -> Result<()> {
                 ],
             )
             .chain_err(|| "failed to insert")?;
-
                 println!(
                     "  {}: inserted {}-[{}]-{} at {}",
                     &i, node0, &channel.satoshis, node1, &channel.short_channel_id
@@ -216,27 +214,58 @@ fn run() -> Result<()> {
                 0
             };
 
-            conn.execute(
-            "INSERT INTO channelpolicies
-                (short_channel_id, direction, base_fee_millisatoshi, fee_per_millionth, delay, update_time)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            ON CONFLICT (short_channel_id, direction, base_fee_millisatoshi, fee_per_millionth, delay) DO NOTHING
-            ",
-                &[
-                    &channel.short_channel_id as &dyn ToSql,
-                    &towards as &dyn ToSql,
-                    &channel.base_fee_millisatoshi as &dyn ToSql,
-                    &channel.fee_per_millionth as &dyn ToSql,
-                    &channel.delay as &dyn ToSql,
-                    &channel.last_update as &dyn ToSql,
-                ],
-            )
-            .chain_err(|| "failed to add policy")?;
+            let isfeepolicyuptodate: Option<bool> = conn
+                .query_row(
+                    "SELECT
+                      CASE WHEN base_fee_millisatoshi = ?3 AND fee_per_millionth = ?4 AND delay = ?5
+                        THEN 1
+                        ELSE 0
+                      END
+                    FROM policies
+                    WHERE short_channel_id = ?1 AND direction = ?2
+                    ORDER BY update_time DESC
+                    LIMIT 1
+                ",
+                    &[
+                        &channel.short_channel_id as &dyn ToSql,
+                        &towards as &dyn ToSql,
+                        &channel.base_fee_millisatoshi as &dyn ToSql,
+                        &channel.fee_per_millionth as &dyn ToSql,
+                        &channel.delay as &dyn ToSql,
+                    ],
+                    |row| row.get(0).map(|integervalue: i64| integervalue == 1),
+                )
+                .optional()
+                .chain_err(|| "failed to prequery policy")?;
 
-            println!(
-                "    {} {}: updated policy ({})->({})",
-                &i, &channel.short_channel_id, &channel.source, &channel.destination
-            );
+            match isfeepolicyuptodate {
+                Some(true) => (), /* current policy is equal to the last stored */
+                _ => {
+                    /* otherwise -- either Some(false) or None -- insert the current policy */
+                    conn.execute(
+                        "INSERT INTO policies
+                            (short_channel_id, direction,
+                             base_fee_millisatoshi, fee_per_millionth, delay,
+                             update_time)
+                        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                    ",
+                        &[
+                            &channel.short_channel_id as &dyn ToSql,
+                            &towards as &dyn ToSql,
+                            &channel.base_fee_millisatoshi as &dyn ToSql,
+                            &channel.fee_per_millionth as &dyn ToSql,
+                            &channel.delay as &dyn ToSql,
+                            &channel.last_update as &dyn ToSql,
+                        ],
+                    )
+                    .chain_err(|| "failed to add policy")?;
+
+                    println!(
+                        "    {} {}: updated policy ({})->({})",
+                        &i, &channel.short_channel_id, &channel.source, &channel.destination
+                    );
+                }
+            }
         }
     }
 

@@ -257,7 +257,7 @@ SELECT
   base_fee_millisatoshi, fee_per_millionth, delay
 FROM channels
 LEFT OUTER JOIN (
-  SELECT * FROM channelpolicies
+  SELECT * FROM policies
   GROUP BY short_channel_id, direction
   ORDER BY short_channel_id, direction, update_time DESC
 ) AS policy
@@ -347,7 +347,7 @@ WHERE short_channel_id = ?1
     let mut query = conn.prepare(
         r#"
 SELECT direction, base_fee_millisatoshi, fee_per_millionth, delay, update_time
-FROM channelpolicies
+FROM policies
 WHERE short_channel_id = ?1
         "#,
     )?;
