@@ -1,8 +1,8 @@
-target/release/lnchannels: src/bin/server.rs src/bin/getdata.rs
+target/release/server: src/bin/server.rs src/bin/getdata.rs
 	cargo build --release
 
-deploy: target/release/lnchannels templates static channels.db
-	rsync --progress target/release/lnchannels hutt:lnchannels/lnchannels
+deploy: target/release/server templates static channels.db
+	rsync --progress target/release/server hutt:lnchannels/lnchannels
 	rsync --progress -r templates hutt:lnchannels/
 	rsync --progress -r static hutt:lnchannels/
 	rsync --progress channels.db hutt:lnchannels/static/channels.db
