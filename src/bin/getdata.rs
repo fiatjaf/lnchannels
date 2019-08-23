@@ -26,7 +26,7 @@ const USAGE: &'static str = "
 getdata
 
 Usage:
-  getdata [--all] [--listchannels] [--listnodes] [--checkcloses] [--enrich] [--materialize]
+  getdata [--all] [--skipgossip] [--listchannels] [--listnodes] [--checkcloses] [--enrich] [--materialize]
 
 Options:
   --listchannels    fetches channels from the lightning network and save them
@@ -35,7 +35,7 @@ Options:
   --enrich          uses a local blockchain to enrich the channel transactions data
   --materialize     reset the materialized views
   --all             do all steps (default)
-  --skiplightning   doesn't fetch channels or nodes
+  --skipgossip      doesn't fetch channels or nodes
 ";
 
 #[derive(Deserialize)]
@@ -46,7 +46,7 @@ struct Args {
     flag_enrich: bool,
     flag_materialize: bool,
     flag_all: bool,
-    flag_skiplightning: bool,
+    flag_skipgossip: bool,
 }
 
 struct StepsToRun {
@@ -66,7 +66,7 @@ fn run() -> Result<()> {
 
     let mut all = args.flag_all;
     if !all
-        && !args.flag_skiplightning
+        && !args.flag_skipgossip
         && !args.flag_listchannels
         && !args.flag_listnodes
         && !args.flag_checkcloses
@@ -84,9 +84,12 @@ fn run() -> Result<()> {
         materialize: args.flag_all || args.flag_materialize,
     };
 
-    if !all && args.flag_skiplightning {
+    if !all && args.flag_skipgossip {
         run.listchannels = false;
         run.listnodes = false;
+        run.checkcloses = true;
+        run.enrich = true;
+        run.materialize = true;
     }
 
     println!("creating sqlite database");
