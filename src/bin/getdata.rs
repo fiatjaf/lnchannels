@@ -35,7 +35,7 @@ Options:
   --enrich          uses a local blockchain to enrich the channel transactions data
   --materialize     reset the materialized views
   --all             do all steps (default)
-  --skipgossip      doesn't fetch channels or nodes
+  --skipgossip      do all steps except fetch channels or nodes
 ";
 
 #[derive(Deserialize)]
@@ -367,9 +367,9 @@ fn run() -> Result<()> {
                 i, short_channel_id, address
             );
 
-            match getchannelclosedata(address)? {
-                None => println!("  {}: still open.", i),
-                Some(closedata) => {
+            match getchannelclosedata(address) {
+                Ok(None) => println!("  {}: still open.", i),
+                Ok(Some(closedata)) => {
                     conn.execute(
                         "UPDATE channels SET close_block = ?2, close_transaction = ?3
                     WHERE short_channel_id = ?1",
@@ -382,6 +382,9 @@ fn run() -> Result<()> {
                     .chain_err(|| "failed to update with blockchain data")?;
 
                     println!("  {}: was closed on block {}", i, &closedata.block);
+                }
+                Err(err) => {
+                    println!("  {}: failed to check: {}", i, &err);
                 }
             };
             i += 1;
