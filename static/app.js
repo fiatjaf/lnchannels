@@ -178,6 +178,20 @@ window.addEventListener('load', () => {
 
   // -- node.html
   if (document.getElementById('node-channels-history')) {
+    let table = document.querySelector('table.node-channels-history')
+
+    // toggle incoming-outgoing fee policy display
+    let toggles = table.querySelectorAll('a.toggle-outgoing-incoming')
+    for (let i = 0; i < toggles.length; i++) {
+      let toggle = toggles[i]
+      toggle.addEventListener('click', e => {
+        e.preventDefault()
+        table.classList.toggle('show-outgoing')
+        table.classList.toggle('show-incoming')
+      })
+    }
+
+    // gather info
     var blockmap = {}
     var opens = {}
     var closes = {}
@@ -187,7 +201,7 @@ window.addEventListener('load', () => {
     var maxcap = 0
     var openchannelsbubbles = []
 
-    let rows = document.querySelectorAll('table.node-channels-history tbody tr')
+    let rows = table.querySelectorAll('tbody tr')
     for (let i = rows.length - 1; i >= 0; i--) {
       let row = rows[i]
       let satoshis = parseFloat(row.children[2].innerHTML)

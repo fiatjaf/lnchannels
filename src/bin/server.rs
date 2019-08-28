@@ -254,15 +254,27 @@ SELECT
   open_block, open_fee,
   close_block, close_fee,
   satoshis,
-  base_fee_millisatoshi, fee_per_millionth, delay
+  policy_out.base_fee_millisatoshi AS outgoing_base_fee_millisatoshi,
+  policy_out.fee_per_millionth AS outgoing_fee_per_millionth,
+  policy_out.delay AS outgoing_delay,
+  policy_in.base_fee_millisatoshi AS incoming_base_fee_millisatoshi,
+  policy_in.fee_per_millionth AS incoming_fee_per_millionth,
+  policy_in.delay AS incoming_delay
 FROM channels
 LEFT OUTER JOIN (
   SELECT * FROM policies
   GROUP BY short_channel_id, direction
   ORDER BY short_channel_id, direction, update_time DESC
-) AS policy
-  ON policy.short_channel_id = channels.short_channel_id
- AND policy.direction = CASE WHEN node0 = ?1 THEN 1 ELSE 0 END
+)
+  AS policy_out ON policy_out.short_channel_id = channels.short_channel_id
+               AND policy_out.direction = CASE WHEN node0 = ?1 THEN 1 ELSE 0 END
+LEFT OUTER JOIN (
+  SELECT * FROM policies
+  GROUP BY short_channel_id, direction
+  ORDER BY short_channel_id, direction, update_time DESC
+)
+  AS policy_in ON policy_in.short_channel_id = channels.short_channel_id
+              AND policy_in.direction = CASE WHEN node0 = ?1 THEN 0 ELSE 1 END
 WHERE node0 = ?1 OR node1 = ?1
 ORDER BY open_block DESC
     "#,
@@ -279,9 +291,12 @@ ORDER BY open_block DESC
             close_block: row.get(6).unwrap_or(0),
             close_fee: row.get(7).unwrap_or(0),
             satoshis: row.get(8)?,
-            base_fee_millisatoshi: row.get(9).unwrap_or(0),
-            fee_per_millionth: row.get(10).unwrap_or(0),
-            delay: row.get(11).unwrap_or(0),
+            outgoing_base_fee_millisatoshi: row.get(9).unwrap_or(0),
+            outgoing_fee_per_millionth: row.get(10).unwrap_or(0),
+            outgoing_delay: row.get(11).unwrap_or(0),
+            incoming_base_fee_millisatoshi: row.get(12).unwrap_or(0),
+            incoming_fee_per_millionth: row.get(13).unwrap_or(0),
+            incoming_delay: row.get(14).unwrap_or(0),
         };
         channels.push(channel);
     }
@@ -491,9 +506,12 @@ struct NodeChannel {
     close_block: i64,
     close_fee: i64,
     satoshis: i64,
-    base_fee_millisatoshi: i64,
-    fee_per_millionth: i64,
-    delay: i64,
+    outgoing_base_fee_millisatoshi: i64,
+    outgoing_fee_per_millionth: i64,
+    outgoing_delay: i64,
+    incoming_base_fee_millisatoshi: i64,
+    incoming_fee_per_millionth: i64,
+    incoming_delay: i64,
 }
 
 #[derive(Serialize)]

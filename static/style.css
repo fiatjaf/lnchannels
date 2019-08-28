@@ -28,6 +28,16 @@ pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
 #node-channels-bubble .highcharts-point { fill: var(--gold) }
 #node-channels-bubble .highcharts-point, #node-channels-bubble .highcharts-data-label { cursor: pointer; }
 
+table.node-channels-history .toggle-outgoing-incoming {
+  cursor: pointer;
+  text-decoration: none;
+  border-style: dotted;
+  border-width: 0 0 3px 0;
+}
+table.node-channels-history .toggle-outgoing-incoming:hover { border-style: dashed; }
+table.node-channels-history.show-outgoing .col-incoming { display: none; }
+table.node-channels-history.show-incoming .col-outgoing { display: none; }
+
 #search { margin: 0.8rem 12px; width: 25%; min-width: 300px; font-size: 0.8em; }
 .search-item { font-family: monospace; padding: 0.1em 0.4em; }
 .search-item:hover { background: whitesmoke; }
