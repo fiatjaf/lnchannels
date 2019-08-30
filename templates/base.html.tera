@@ -32,4 +32,5 @@
 {% endblock body %}
 </main>
 
+<script>window.stats = {{ stats | safe | json_encode() }}</script>
 <script src="/static/app.js"></script>

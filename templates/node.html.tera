@@ -45,7 +45,7 @@
         <th>with</th>
         <th>id</th>
         <th>total satoshis</th>
-        <th>fee paid</th>
+        <th>chain fee</th>
         <th>open</th>
         <th>close</th>
         <th class="col-outgoing">↗ <a class="toggle-outgoing-incoming">outgoing</a> fee policy</th>

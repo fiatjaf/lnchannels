@@ -19,8 +19,14 @@
     <th>nodes</th>
     <td>
       <table>
-        <td><a href="/node/{{ channel.node0 }}">{% if channel.node0name %}{{ channel.node0name }}{% else %}{{ channel.node0 | abbr }}{% endif %}</a></td>
-        <td><a href="/node/{{ channel.node1 }}">{% if channel.node1name %}{{ channel.node1name }}{% else %}{{ channel.node1 | abbr }}{% endif %}</a></td>
+        <tr>
+          <td>{% if channel.node0name %}{{ channel.node0name }}{% else %}{{ channel.node0 | abbr }}{% endif %}</td>
+          <td>{% if channel.node1name %}{{ channel.node1name }}{% else %}{{ channel.node1 | abbr }}{% endif %}</td>
+        </tr>
+        <tr>
+          <td><a href="/node/{{ channel.node0 }}">{{ channel.node0 | abbr }}</a></td>
+          <td><a href="/node/{{ channel.node1 }}">{{ channel.node1 | abbr }}</a></td>
+        </tr>
       </table>
     </td>
   </tr>

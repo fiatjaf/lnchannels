@@ -243,6 +243,11 @@ window.addEventListener('load', () => {
       maxcap = cap > maxcap ? cap : maxcap
     }
 
+    // insert last block if not exists (so the chart is not stuck in a past position)
+    if (!(window.stats.last_block in blockmap)) {
+      blockmap[window.stats.last_block] = true
+    }
+
     // make main chart
     let blocks = Object.keys(blockmap).sort()
     var openings = []

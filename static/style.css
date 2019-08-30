@@ -11,6 +11,7 @@ main { margin: 0 1rem; }
 h1, h2, h3, h4, h5, h6 { white-space: pre-wrap; word-wrap: break-word; }
 td { font-family: monospace; font-size: 0.9em; position: relative; }
 table tr:nth-child(2n) { background-color: #fdfdfd; }
+table table { margin: 0; }
 
 pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
 .closed { background: var(--red) !important; }
