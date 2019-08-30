@@ -46,7 +46,7 @@
         {% for policy in upwardpolicies %}
         <tr>
           <td>{{ policy.base_fee_millisatoshi / 1000 }} sat</td>
-          <td>{{ policy.fee_per_millionth / 1000 }}</td>
+          <td>{{ policy.fee_per_millionth / 10000 }}</td>
           <td>{{ policy.delay }}</td>
           <td>{{ policy.update_time | date(format='%a %b %e %T %Y') }}</td>
         </tr>
@@ -70,7 +70,7 @@
         {% for policy in downwardpolicies %}
         <tr>
           <td>{{ policy.base_fee_millisatoshi / 1000 }} sat</td>
-          <td>{{ policy.fee_per_millionth / 1000 }}</td>
+          <td>{{ policy.fee_per_millionth / 10000 }}</td>
           <td>{{ policy.delay }}</td>
           <td>{{ policy.update_time | date(format='%a %b %e %T %Y') }}</td>
         </tr>
