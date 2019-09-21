@@ -3,7 +3,7 @@
 {% block description %}Information about the Lightning Network channel {{ channel.short_channel_id }} between {{ channel.node0name }} and {{ channel.node1name }}.{% endblock description %}
 
 {% block body %}
-<h1>channel <pre class="id">{{ channel.short_channel_id }}</pre></h1>
+<h1>channel <pre class="id {% if channel.close_block %}closed{% endif %}">{{ channel.short_channel_id }}</pre></h1>
 
 <h4>details</h4>
 <table>
