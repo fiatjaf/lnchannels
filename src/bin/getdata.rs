@@ -596,6 +596,7 @@ fn getchannels() -> Result<Vec<Channel>> {
     spark_url.push_str("/rpc");
     let client = reqwest::Client::builder()
         .gzip(true)
+        .danger_accept_invalid_certs(true)
         .timeout(Duration::from_secs(120))
         .build()
         .chain_err(|| "failed to make spark client")?;
@@ -621,6 +622,7 @@ fn getnodes() -> Result<Vec<Node>> {
     spark_url.push_str("/rpc");
     let client = reqwest::Client::builder()
         .gzip(true)
+        .danger_accept_invalid_certs(true)
         .timeout(Duration::from_secs(120))
         .build()
         .chain_err(|| "failed to make spark client")?;
