@@ -1,7 +1,7 @@
 <!doctype html>
 
 <meta charset=utf-8>
-<title>{% block title %}{% endblock title %}ln.alhur.es</title>
+<title>{% block title %}{% endblock title %}ln.bigsun.xyz</title>
 <meta name=description content="{% block description %}A compendium of historical data about the Lightning Network nodes and channels.{% endblock description %}">
 <link rel=stylesheet href=https://unpkg.com/style.css>
 <link rel=stylesheet href=https://unpkg.com/top-bar.css>
@@ -16,7 +16,7 @@
 <script src=https://cdnjs.cloudflare.com/ajax/libs/ismobilejs/0.4.1/isMobile.min.js></script>
 
 <nav class="top-bar">
-  <a href="/" class="top-bar-title">ln.alhur.es</a>
+  <a href="/" class="top-bar-title">ln.bigsun.xyz</a>
   <input id="search" placeholder="search node id or name, channel id or block">
 
   <div class="top-bar-right">
