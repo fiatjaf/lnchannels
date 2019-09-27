@@ -19,8 +19,8 @@ use std::time::Duration;
 
 use crate::bitcoin::*;
 use crate::errors::*;
+use crate::esplora::*;
 use crate::lightning::*;
-use crate::smartbit::*;
 
 const USAGE: &'static str = "
 getdata
@@ -709,31 +709,17 @@ struct ChannelCloseData {
 }
 
 fn getchannelclosedata(address: String) -> Result<Option<ChannelCloseData>> {
-    let mut w = reqwest::get(
-        format!(
-            "https://api.smartbit.com.au/v1/blockchain/address/{}",
-            address
-        )
-        .as_str(),
-    )
-    .chain_err(|| "smartbit address call failed")?;
+    let mut w =
+        reqwest::get(format!("https://blockstream.info/api/address/{}/txs", address).as_str())
+            .chain_err(|| "esplora address call failed")?;
 
-    let response: SmartbitResponse = w
-        .json()
-        .chain_err(|| "failed to decode smartbit response")?;
+    let transactions: Vec<EsploraTx> =
+        w.json().chain_err(|| "failed to decode esplora response")?;
 
-    if response.address.transactions.len() == 2 && response.address.transactions[1].block.is_some()
-    {
-        let transactions = response.address.transactions;
-        let closetx = if transactions[0].block > transactions[1].block {
-            &transactions[0]
-        } else {
-            &transactions[1]
-        };
-
+    if transactions.len() == 2 && transactions[0].status.confirmed {
         Ok(Some(ChannelCloseData {
-            block: closetx.block.unwrap(),
-            transaction: closetx.txid.clone(),
+            block: transactions[0].status.block_height.clone(),
+            transaction: transactions[0].txid.clone(),
         }))
     } else {
         Ok(None)
@@ -855,22 +841,28 @@ mod bitcoin {
     }
 }
 
-mod smartbit {
+mod esplora {
     use serde::Deserialize;
 
     #[derive(Deserialize)]
-    pub struct SmartbitResponse {
-        pub address: Address,
-    }
-
-    #[derive(Deserialize)]
-    pub struct Address {
-        pub transactions: Vec<Transaction>,
-    }
-
-    #[derive(Deserialize)]
-    pub struct Transaction {
+    pub struct EsploraTx {
         pub txid: String,
-        pub block: Option<i64>,
+        pub status: EsploraTxStatus,
+    }
+
+    #[derive(Deserialize)]
+    pub struct EsploraInput {
+        pub prevout: EsploraPrevout,
+    }
+
+    #[derive(Deserialize)]
+    pub struct EsploraPrevout {
+        pub scriptpubkey_address: String,
+    }
+
+    #[derive(Deserialize)]
+    pub struct EsploraTxStatus {
+        pub confirmed: bool,
+        pub block_height: i64,
     }
 }
