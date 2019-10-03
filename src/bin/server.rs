@@ -205,7 +205,7 @@ fn show_node(nodeid: String) -> Result<Template> {
 
     let pubkey = nodeid.to_lowercase();
 
-    let node: NodeAggregate = conn.query_row_and_then(
+    let node: NodeAggregate = match conn.query_row_and_then(
         r#"
 SELECT
   pubkey,
@@ -221,7 +221,13 @@ FROM nodes WHERE pubkey = ?1
         "#,
         params![pubkey],
         row_to_node_aggregate,
-    )?;
+    ) {
+        Ok(node) => node,
+        Err(_) => NodeAggregate {
+            id: pubkey.clone(),
+            ..Default::default()
+        },
+    };
     context.insert("node", &node);
 
     let mut aliases = Vec::new();
@@ -514,7 +520,7 @@ struct NodeChannel {
     incoming_delay: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 struct NodeAggregate {
     id: String,
     name: String,
