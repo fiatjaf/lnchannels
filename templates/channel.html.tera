@@ -95,8 +95,8 @@
     <th>fee paid</th>
   </tr>
   <tr>
-    <td><a href="https://www.smartbit.com.au/block/{{ channel.open_block }}">{{ channel.open_block }}</a></td>
-    <td><a href="https://www.smartbit.com.au/tx/{{ channel.open_transaction }}">{{ channel.open_transaction }}</a></td>
+    <td><a href="https://blockstream.info/block/{{ channel.open_block }}">{{ channel.open_block }}</a></td>
+    <td><a href="https://blockstream.info/tx/{{ channel.open_transaction }}">{{ channel.open_transaction }}</a></td>
     <td>{{ channel.open_time }}</td>
     <td>{{ channel.open_fee }}</td>
   </tr>
@@ -112,8 +112,8 @@
       <th>fee paid</th>
     </tr>
     <tr>
-      <td><a href="https://www.smartbit.com.au/block/{{ channel.close_block }}">{{ channel.close_block }}</a></td>
-      <td><a href="https://www.smartbit.com.au/tx/{{ channel.close_transaction }}">{{ channel.close_transaction }}</a></td>
+      <td><a href="https://blockstream.info/block/{{ channel.close_block }}">{{ channel.close_block }}</a></td>
+      <td><a href="https://blockstream.info/tx/{{ channel.close_transaction }}">{{ channel.close_transaction }}</a></td>
       <td>{{ channel.close_time }}</td>
       <td>{{ channel.close_fee }}</td>
     </tr>
