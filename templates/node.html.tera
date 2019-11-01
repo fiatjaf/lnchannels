@@ -1,5 +1,5 @@
 {% extends "base" %}
-{% block title %}node "{{ nodename }}" | {% endblock title %}
+{% block title %}node {% if nodename %}"{{ nodename }}"{% else %}{{ node.id | abbr }}{% endif %} | {% endblock title %}
 {% block description %}{{node.id | abbr}}: {{ node.nopen }} channels, total capacity of {{ node.cap }} satoshis{% endblock description %}
 
 {% block body %}
