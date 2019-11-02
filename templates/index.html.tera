@@ -5,6 +5,10 @@
   <div id=open-close />
 </div>
 <div>
+  <h4>types of channel closes</h4>
+  <div id=close-types />
+</div>
+<div>
   <h4>some of the biggest nodes</h4>
   <table id=all-nodes>
     <thead>
@@ -64,7 +68,16 @@ window.closings = {{ closings | safe | json_encode }}
 window.total = {{ total | safe | json_encode }}
 window.capacity = {{ capacity | safe | json_encode }}
 window.fee_total = {{ fee_total | safe | json_encode }}
-window.fee_average = {{ fee_average | safe | json_encode }}
+window.outstanding_htlcs = {{ outstanding_htlcs | safe | json_encode }}
+
 window.allnodes = {{ allnodes | safe | json_encode }}
+
+window.closeblocks = {{ closeblocks | safe | json_encode }}
+window.unknown = {{ unknown | safe | json_encode }}
+window.unused = {{ unused | safe | json_encode }}
+window.mutual = {{ mutual | safe | json_encode }}
+window.force = {{ force | safe | json_encode }}
+window.force_unused = {{ force_unused | safe | json_encode }}
+window.penalty = {{ penalty | safe | json_encode }}
 </script>
 {% endblock body %}

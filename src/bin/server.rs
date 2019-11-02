@@ -33,7 +33,6 @@ static FIRST_BLOCK: i64 = 578600;
 
 #[get("/")]
 fn index() -> Result<Template> {
-    // first block we may say we have meaningful data from
     let mut context = Context::new();
     let conn = Connection::open("channels.db")?;
 
@@ -48,17 +47,18 @@ fn index() -> Result<Template> {
     let mut total: Vec<i64> = Vec::new();
     let mut capacity: Vec<i64> = Vec::new();
     let mut fee_total: Vec<i64> = Vec::new();
-    let mut fee_average: Vec<f64> = Vec::new();
+    let mut outstanding_htlcs: Vec<i64> = Vec::new();
     let mut q = conn.prepare(
         r#"
-SELECT blockgroup, sum(opened) AS opened, sum(closed) AS closed, sum(cap_change) AS cap_change, fee_total
+SELECT blockgroup, sum(opened) AS opened, sum(closed) AS closed, sum(cap_change) AS cap_change, fee_total, htlcs
 FROM (
     -- initial aggregates
     SELECT ((?1/100)-1)*100 AS blockgroup,
       count(*) AS opened,
       0 AS closed,
       sum(satoshis) AS cap_change,
-      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total
+      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total,
+      0 AS htlcs
     FROM channels
     WHERE open_block < ?1
   UNION ALL
@@ -67,7 +67,8 @@ FROM (
       count(open_block) AS opened,
       0 AS closed,
       sum(satoshis) AS cap_change,
-      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total
+      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total,
+      0 AS htlcs
     FROM channels
     WHERE open_block >= ?1
     GROUP BY open_block/100
@@ -77,10 +78,11 @@ FROM (
       0 AS opened,
       count(close_block) AS closed,
       -sum(satoshis) AS cap_change,
-      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total
+      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total,
+      coalesce(close_htlc_count, 0) AS htlcs
     FROM channels
     WHERE close_block IS NOT NULL AND close_block >= ?1
-    GROUP BY open_block/100
+    GROUP BY close_block/100
 ) AS main
 GROUP BY blockgroup
 ORDER BY blockgroup
@@ -110,7 +112,9 @@ ORDER BY blockgroup
 
         let fee: i64 = row.get(4)?;
         fee_total.push(fee);
-        fee_average.push(fee as f64 / current_total as f64);
+
+        let htlcs: i64 = row.get(5)?;
+        outstanding_htlcs.push(htlcs);
     }
     context.insert("blocks", &blocks[1..]);
     context.insert("openings", &openings[1..]);
@@ -118,7 +122,46 @@ ORDER BY blockgroup
     context.insert("total", &total[1..]);
     context.insert("capacity", &capacity[1..]);
     context.insert("fee_total", &fee_total[1..]);
-    context.insert("fee_average", &fee_average[1..]);
+    context.insert("outstanding_htlcs", &outstanding_htlcs[1..]);
+
+    // close types
+    let mut closeblocks: Vec<i64> = Vec::new();
+    let mut unknown: Vec<i64> = Vec::new();
+    let mut unused: Vec<i64> = Vec::new();
+    let mut mutual: Vec<i64> = Vec::new();
+    let mut force: Vec<i64> = Vec::new();
+    let mut force_unused: Vec<i64> = Vec::new();
+    let mut penalty: Vec<i64> = Vec::new();
+    let mut q = conn.prepare(
+        r#"
+SELECT * FROM (
+  SELECT
+    blockgroup, unknown, unused, mutual, force, force_unused, penalty
+  FROM closetypes
+  WHERE blockgroup >= ?1
+  ORDER BY blockgroup DESC
+  LIMIT -1 OFFSET 1
+)p
+ORDER BY blockgroup ASC
+    "#,
+    )?;
+    let mut rows = q.query(params![FIRST_BLOCK])?;
+    while let Some(row) = rows.next()? {
+        closeblocks.push(row.get(0)?);
+        unknown.push(row.get(1)?);
+        unused.push(row.get(2)?);
+        mutual.push(row.get(3)?);
+        force.push(row.get(4)?);
+        force_unused.push(row.get(5)?);
+        penalty.push(row.get(6)?);
+    }
+    context.insert("closeblocks", &closeblocks);
+    context.insert("unknown", &unknown);
+    context.insert("unused", &unused);
+    context.insert("mutual", &mutual);
+    context.insert("force", &force);
+    context.insert("force_unused", &force_unused);
+    context.insert("penalty", &mutual);
 
     // longest-living channels
     let mut longestliving = Vec::new();
@@ -334,7 +377,8 @@ SELECT
     open_block, open_fee, open_transaction, open_time, 
     close_block, close_fee, close_transaction, close_time,
     address, node0, node1, satoshis,
-    short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, '')
+    short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, ''),
+    close_type, close_htlc_count, close_balance_a, close_balance_b
 FROM channels
 LEFT OUTER JOIN nodes AS n0 ON n0.pubkey = node0
 LEFT OUTER JOIN nodes AS n1 ON n1.pubkey = node1
@@ -358,6 +402,10 @@ WHERE short_channel_id = ?1
                 short_channel_id: row.get(12)?,
                 node0name: row.get(13)?,
                 node1name: row.get(14)?,
+                close_type: row.get(15).unwrap_or(String::from("")),
+                close_htlc_count: row.get(16).unwrap_or(0),
+                close_balance_a: row.get(17).unwrap_or(0),
+                close_balance_b: row.get(18).unwrap_or(0),
             })
         },
     )?;
@@ -471,6 +519,10 @@ struct FullChannel {
     node1: String,
     node1name: String,
     satoshis: i64,
+    close_type: String,
+    close_htlc_count: i64,
+    close_balance_a: i64,
+    close_balance_b: i64,
 }
 
 #[derive(Serialize)]

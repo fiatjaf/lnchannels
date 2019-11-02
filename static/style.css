@@ -24,6 +24,7 @@ pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
   bottom: 0;
   background-color: #333;
 }
+*:hover > .bar { z-index: -1; }
 .highcharts-credits { display: none; }
 
 #node-channels-bubble .highcharts-point { fill: var(--gold) }
