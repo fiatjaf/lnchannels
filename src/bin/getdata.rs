@@ -111,6 +111,11 @@ fn run() -> Result<()> {
             close_transaction TEXT,
             close_fee INTEGER,
 
+            close_type TEXT,
+            close_htlc_count INTEGER,
+            close_balance_a INTEGER, -- we don't know if node0 is A or B
+            close_balance_b INTEGER, -- and vice-versa
+
             node0 TEXT NOT NULL,
             node1 TEXT NOT NULL,
 
@@ -425,6 +430,7 @@ fn run() -> Result<()> {
             i += 1;
         }
 
+        i = 0;
         let mut q = conn.prepare(
             "SELECT short_channel_id, close_block, close_transaction FROM channels
             WHERE close_block IS NOT NULL and close_time IS NULL",
@@ -451,6 +457,46 @@ fn run() -> Result<()> {
             println!(
                 "  {}: {} enriched with {}/{}",
                 i, short_channel_id, close_data.time, close_data.fee
+            );
+            i += 1;
+        }
+
+        i = 0;
+        let mut q = conn.prepare(
+            "SELECT short_channel_id, close_transaction FROM channels
+            WHERE close_transaction IS NOT NULL and close_type IS NULL",
+        )?;
+        let mut rows = q.query(NO_PARAMS)?;
+        while let Some(row) = rows.next()? {
+            let short_channel_id: String = row.get(0)?;
+            let close_transaction: String = row.get(1)?;
+
+            println!("  {}: enriching channel {}", i, short_channel_id);
+            let close_type_data = getclosetypedata(&close_transaction)?;
+            conn.execute(
+                "UPDATE channels
+                SET close_type = ?2,
+                close_balance_a = ?3,
+                close_balance_b = ?4,
+                close_htlc_count = ?5
+                WHERE short_channel_id = ?1",
+                &[
+                    &short_channel_id as &dyn ToSql,
+                    &close_type_data.typ as &dyn ToSql,
+                    &close_type_data.balance_a as &dyn ToSql,
+                    &close_type_data.balance_b as &dyn ToSql,
+                    &close_type_data.htlcs as &dyn ToSql,
+                ],
+            )
+            .chain_err(|| "failed to enrich channel data")?;
+            println!(
+                "  {}: {} enriched with type {}, balance {}/{}, {} htlcs",
+                i,
+                short_channel_id,
+                close_type_data.typ,
+                close_type_data.balance_a,
+                close_type_data.balance_b,
+                close_type_data.htlcs,
             );
             i += 1;
         }
@@ -703,6 +749,147 @@ fn gettransactionblockchaindata(blockheight: i64, txid: &String) -> Result<Trans
     })
 }
 
+struct ChannelCloseTypeData {
+    typ: String,
+    balance_a: i64,
+    balance_b: i64,
+    htlcs: i64,
+}
+
+fn getclosetypedata(txid: &String) -> Result<ChannelCloseTypeData> {
+    let bitcoind_url = env::var("BITCOIN_URL").chain_err(|| "failed to read BITCOIN_URL")?;
+    let bitcoind_user = env::var("BITCOIN_USER").chain_err(|| "failed to read BITCOIN_USER")?;
+    let bitcoind_password =
+        env::var("BITCOIN_PASSWORD").chain_err(|| "failed to read BITCOIN_PASSWORD")?;
+
+    let client =
+        jsonrpc::client::Client::new(bitcoind_url, Some(bitcoind_user), Some(bitcoind_password));
+
+    // defaults
+    let mut detail = ChannelCloseTypeData {
+        typ: "unknown".to_string(),
+        balance_a: 0,
+        balance_b: 0,
+        htlcs: 0,
+    };
+
+    // try to determine what happened when the channel was closed by inspecting the closing transaction
+    // and the ones after it.
+    let transaction = readtransaction(&client, txid)?;
+    let mut outs: Vec<&str> = Vec::new();
+
+    // label each output of the closing transaction (we'll have to look at the transactions that spend them)
+    for o in transaction.vout.iter() {
+        if o.script_pub_key.typ == "witness_v0_keyhash" {
+            outs.push("pubkey");
+            continue;
+        } else {
+            let address = &o.script_pub_key.addresses[0];
+            let mut w = reqwest::get(
+                format!("https://blockstream.info/api/address/{}/txs", address).as_str(),
+            )
+            .chain_err(|| "esplora address call failed")?;
+
+            let transactions: Vec<EsploraTx> =
+                w.json().chain_err(|| "failed to decode esplora response")?;
+
+            let mut witness = Vec::new();
+
+            // find the followup transaction and the witness data we need to determine the type of the previous
+            for followuptx in transactions.iter() {
+                // inspect the script from the witness data of the followup transaction to determine this.
+                let next = readtransaction(&client, &followuptx.txid)?;
+
+                // find the output we're interested in if the followup transaction uses many
+                let mut found_yet = false;
+                for input in next.vin.iter() {
+                    if input.txid == transaction.txid && input.vout == o.n {
+                        witness = input.txinwitness.clone();
+                        found_yet = true;
+                        break;
+                    }
+                }
+
+                if found_yet {
+                    break;
+                }
+            }
+
+            if witness.len() == 0 {
+                // didn't find a witness.
+                // transaction wasn't spent (and also isn't a pubkey). very odd.
+                // however, we'll assume it's an htlc if there are more than 2 outputs
+                if transaction.vout.len() > 2 {
+                    outs.push("htlc");
+                } else {
+                    outs.push("unknown");
+                }
+                continue;
+            }
+
+            let script = decodescript(&client, &witness[witness.len() - 1])?;
+            if script.contains("OP_HASH160") {
+                outs.push("htlc");
+            } else if script.contains("OP_CHECKSEQUENCEVERIFY") {
+                if witness[witness.len() - 2] == "01" {
+                    outs.push("penalty");
+                } else {
+                    outs.push("balance");
+                }
+            }
+        }
+    }
+
+    // now that we have labels for all outputs we use a simple (maybe wrong?) heuristic
+    // to determine what happened.
+    if outs.len() == 1 && outs[0] == "pubkey" {
+        detail.typ = "unused".to_string();
+        detail.balance_a = transaction.vout[0].sat;
+    } else if outs.len() == 2 && outs[0] == "pubkey" && outs[1] == "pubkey" {
+        detail.typ = "mutual".to_string();
+        detail.balance_a = transaction.vout[0].sat;
+        detail.balance_b = transaction.vout[1].sat;
+    } else {
+        let mut i = 0;
+        for out in outs.iter() {
+            if *out == "htlc" {
+                detail.htlcs += 1;
+                continue;
+            }
+
+            if *out == "penalty" {
+                detail.typ = "penalty".to_string();
+                if detail.balance_a == 0 {
+                    detail.balance_a = transaction.vout[i].sat;
+                } else if detail.balance_b == 0 {
+                    detail.balance_b = transaction.vout[i].sat;
+                } else {
+                    panic!("3 balances!")
+                }
+                continue;
+            }
+
+            if *out == "balance" || *out == "pubkey" {
+                detail.typ = "force".to_string();
+
+                if detail.balance_a == 0 {
+                    detail.balance_a = transaction.vout[i].sat;
+                } else if detail.balance_b == 0 {
+                    detail.balance_b = transaction.vout[i].sat;
+                } else {
+                    // this should never happen, but theoretically it's possible for both peers to agree
+                    // to spend the funding transaction to multiple pubkeys or whatever
+                    detail.typ = "unknown".to_string();
+                }
+            }
+
+            i += 1;
+        }
+    }
+
+    Ok(detail)
+}
+
 struct ChannelCloseData {
     block: i64,
     transaction: String,
@@ -781,18 +968,26 @@ mod bitcoin {
 
     #[derive(Deserialize)]
     pub struct DecodedTransaction {
+        pub txid: String,
         pub vout: Vec<Output>,
         pub vin: Vec<Input>,
+    }
+
+    #[derive(Deserialize)]
+    struct SegwitScript {
+        pub asm: String,
     }
 
     #[derive(Deserialize)]
     pub struct Input {
         pub txid: String,
         pub vout: i64,
+        pub txinwitness: Vec<String>,
     }
 
     #[derive(Deserialize)]
     pub struct Output {
+        pub n: i64,
         #[serde(rename(deserialize = "scriptPubKey"))]
         pub script_pub_key: ScriptPubKey,
         #[serde(rename(deserialize = "value"), deserialize_with = "btctosat")]
@@ -803,6 +998,8 @@ mod bitcoin {
     pub struct ScriptPubKey {
         #[serde(default)]
         pub addresses: Vec<String>,
+        #[serde(rename(deserialize = "type"))]
+        pub typ: String,
     }
 
     pub fn readtransaction(
@@ -818,6 +1015,14 @@ mod bitcoin {
             .chain_err(|| "failed to decoderawtransaction")?;
 
         Ok(transaction)
+    }
+
+    pub fn decodescript(client: &jsonrpc::client::Client, script: &String) -> Result<String> {
+        let data: SegwitScript = client
+            .do_rpc("decodescript", &[Value::String(script.clone())])
+            .chain_err(|| "failed to decodescript")?;
+
+        Ok(data.asm)
     }
 
     pub fn readblock(client: &jsonrpc::client::Client, blockheight: i64) -> Result<Block> {
