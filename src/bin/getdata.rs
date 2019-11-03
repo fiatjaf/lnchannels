@@ -915,32 +915,32 @@ fn getclosetypedata(txid: &String) -> Result<ChannelCloseTypeData> {
 
             if *out == "penalty" {
                 detail.typ = "penalty".to_string();
+            }
+
+            if *out == "balance" {
+                detail.typ = "force".to_string();
+            }
+
+            if *out == "penalty" || *out == "balance" || *out == "pubkey" {
                 if detail.balance_a == 0 {
                     detail.balance_a = transaction.vout[i].sat;
                 } else if detail.balance_b == 0 {
                     detail.balance_b = transaction.vout[i].sat;
                 } else {
-                    panic!("3 balances!")
+                    // this should never happen, but let's mark as unknown so we can inspect later
+                    detail.typ = "unknown".to_string();
                 }
                 continue;
             }
 
-            if *out == "balance" || *out == "pubkey" {
-                detail.typ = "force".to_string();
-
-                if detail.balance_a == 0 {
-                    detail.balance_a = transaction.vout[i].sat;
-                } else if detail.balance_b == 0 {
-                    detail.balance_b = transaction.vout[i].sat;
-                } else {
-                    // this should never happen, but theoretically it's possible for both peers to agree
-                    // to spend the funding transaction to multiple pubkeys or whatever
-                    detail.typ = "unknown".to_string();
-                }
-            }
-
             i += 1;
         }
+    }
+
+    // no matter how balances were arranged above, if we detected a penalty we can assume everything is on one side
+    if detail.typ == "penalty" {
+        detail.balance_a = detail.balance_b;
+        detail.balance_b = 0;
     }
 
     Ok(detail)
