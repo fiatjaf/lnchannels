@@ -161,7 +161,7 @@ ORDER BY blockgroup ASC
     context.insert("mutual", &mutual);
     context.insert("force", &force);
     context.insert("force_unused", &force_unused);
-    context.insert("penalty", &mutual);
+    context.insert("penalty", &penalty);
 
     // longest-living channels
     let mut longestliving = Vec::new();
