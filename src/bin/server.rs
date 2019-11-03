@@ -276,7 +276,7 @@ FROM nodes WHERE pubkey = ?1
     let mut aliases = Vec::new();
     let mut q = conn.prepare(
         r#"
-SELECT last_seen, alias
+SELECT first_seen, alias
 FROM nodealiases
 WHERE pubkey = ?1
 ORDER BY first_seen DESC
@@ -285,7 +285,7 @@ ORDER BY first_seen DESC
     let mut rows = q.query(params![pubkey])?;
     while let Some(row) = rows.next()? {
         let alias = NodeAlias {
-            last_seen: row.get(0)?,
+            first_seen: row.get(0)?,
             alias: row.get(1)?,
         };
         aliases.push(alias);
@@ -308,7 +308,9 @@ SELECT
   policy_out.delay AS outgoing_delay,
   policy_in.base_fee_millisatoshi AS incoming_base_fee_millisatoshi,
   policy_in.fee_per_millionth AS incoming_fee_per_millionth,
-  policy_in.delay AS incoming_delay
+  policy_in.delay AS incoming_delay,
+  close_type,
+  close_htlc_count
 FROM channels
 LEFT OUTER JOIN (
   SELECT * FROM policies
@@ -346,6 +348,8 @@ ORDER BY open_block DESC
             incoming_base_fee_millisatoshi: row.get(12).unwrap_or(0),
             incoming_fee_per_millionth: row.get(13).unwrap_or(0),
             incoming_delay: row.get(14).unwrap_or(0),
+            close_type: row.get(15).unwrap_or("".to_string()),
+            close_htlc_count: row.get(16).unwrap_or(0),
         };
         channels.push(channel);
     }
@@ -550,7 +554,7 @@ struct ChannelPolicy {
 #[derive(Serialize)]
 struct NodeAlias {
     alias: String,
-    last_seen: String,
+    first_seen: String,
 }
 
 #[derive(Serialize)]
@@ -570,6 +574,8 @@ struct NodeChannel {
     incoming_base_fee_millisatoshi: i64,
     incoming_fee_per_millionth: i64,
     incoming_delay: i64,
+    close_type: String,
+    close_htlc_count: i64,
 }
 
 #[derive(Serialize, Default)]

@@ -5,26 +5,36 @@
 {% block body %}
 <h1>node <pre class="id">{{ node.id }}</pre></h1>
 
-<div>
+<div class="flex-col">
   {% if aliases %}
-  <h4>node names</h4>
-  <table>
-    <thead>
-      <tr>
-        <th>last seen</th>
-        <th>alias</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for alias in aliases %}
-      <tr>
-        <td>{{ alias.last_seen }}</td>
-        <td>{{ alias.alias }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div>
+    <h4>node names</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>first seen</th>
+          <th>alias</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for alias in aliases %}
+        <tr>
+          <td>{{ alias.first_seen }}</td>
+          <td>{{ alias.alias }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
+  <table>
+    <tr><th>open channels</th><td>{{ node.nopen }}</td></tr>
+    <tr><th>closed channels</th><td>{{ node.nclosed }}</td></tr>
+    <tr><th>avg channel duration</th><td>{{ node.avgduration }}</td></tr>
+    <tr><th>avg opening fee</th><td>{{ node.avgopenfee }}</td></tr>
+    <tr><th>avg closing fee</th><td>{{ node.avgclosefee }}</td></tr>
+    <tr><th>capacity</th><td>{{ node.cap }}</td></tr>
+  </table>
 </div>
 
 <div>
@@ -61,8 +71,15 @@
         <td title="{{ 100 * (channel.open_fee + channel.close_fee) / channel.satoshis | round(method="ceil", precision=2) }}% of the channel value">{{ channel.open_fee }}{% if channel.close_block > 0 %} + {{ channel.close_fee }} = {{ channel.open_fee + channel.close_fee }}{% endif %}</td>
         <td>{{ channel.open_block }}</td>
         <td>{% if channel.close_block > 0 %}{{ channel.close_block }}{% endif %}</td>
-        <td class="col-outgoing">{{ channel.outgoing_fee_per_millionth / 10000 }}% (min {{ channel.outgoing_base_fee_millisatoshi / 1000 }} sat); delay of {{ channel.outgoing_delay }}</td>
-        <td class="col-incoming">{{ channel.incoming_fee_per_millionth / 10000 }}% (min {{ channel.incoming_base_fee_millisatoshi / 1000 }} sat); delay of {{ channel.incoming_delay }}</td>
+        {% if channel.close_block > 0 %}
+          <td>
+            {% if channel.close_type %}closed as <strong>{{ channel.close_type }}</strong>{% endif %}
+            {% if channel.close_htlc_count > 0 %}with {{ channel.close_htlc_count }} HTLC{% if channel.close_htlc_count != 1 %}s{% endif %}{% endif %}
+          </td>
+        {% else %}
+          <td class="col-outgoing">{{ channel.outgoing_fee_per_millionth / 10000 }}% (min {{ channel.outgoing_base_fee_millisatoshi / 1000 }} sat); delay of {{ channel.outgoing_delay }}</td>
+          <td class="col-incoming">{{ channel.incoming_fee_per_millionth / 10000 }}% (min {{ channel.incoming_base_fee_millisatoshi / 1000 }} sat); delay of {{ channel.incoming_delay }}</td>
+        {% endif %}
       </tr>
     {% endfor %}
     </tbody>

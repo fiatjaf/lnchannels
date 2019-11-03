@@ -27,6 +27,11 @@ pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
 *:hover > .bar { z-index: -1; }
 .highcharts-credits { display: none; }
 
+.flex-col {
+  display: flex;
+  justify-content: space-between;
+}
+
 #node-channels-bubble .highcharts-point { fill: var(--gold) }
 #node-channels-bubble .highcharts-point, #node-channels-bubble .highcharts-data-label { cursor: pointer; }
 

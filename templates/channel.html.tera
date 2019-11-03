@@ -120,11 +120,11 @@
         <a href="https://blockstream.info/tx/{{ channel.close_transaction }}">{{ channel.close_transaction }}</a>
         {% if channel.close_type %}
         <div>
-          <strong>{{ channel.close_type }}</strong>
-          {% if channel.close_htlc_count > 0 %}HTLC count: {{ channel.close_htlc_count }}{% endif %}
+          closed as <strong>{{ channel.close_type }}</strong>
+          {% if channel.close_htlc_count > 0 %} with {{ channel.close_htlc_count }} HTLC{% if channel.close_htlc_count != 1 %}s{% endif %}{% endif %}
         </div>
         <div>
-          <em>{{ channel.close_balance_a }} sat</em> ↹ <em>{{ channel.close_balance_b }} sat</em>
+          one node got <em>{{ channel.close_balance_a }} sat</em> and the other <em>{{ channel.close_balance_b }} sat</em> (except HTLCs)
         </div>
         {% endif %}
       </td>
