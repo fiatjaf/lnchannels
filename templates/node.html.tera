@@ -27,14 +27,18 @@
     </table>
   </div>
   {% endif %}
-  <table>
-    <tr><th>open channels</th><td>{{ node.nopen }}</td></tr>
-    <tr><th>closed channels</th><td>{{ node.nclosed }}</td></tr>
-    <tr><th>avg channel duration</th><td>{{ node.avgduration }}</td></tr>
-    <tr><th>avg opening fee</th><td>{{ node.avgopenfee }}</td></tr>
-    <tr><th>avg closing fee</th><td>{{ node.avgclosefee }}</td></tr>
-    <tr><th>capacity</th><td>{{ node.cap }}</td></tr>
-  </table>
+  <div>
+    <table>
+      <tbody>
+        <tr><th>open channels</th><td>{{ node.nopen }}</td></tr>
+        <tr><th>closed channels</th><td>{{ node.nclosed }}</td></tr>
+        <tr><th>avg channel duration</th><td>{{ node.avgduration }}</td></tr>
+        <tr><th>avg opening fee</th><td>{{ node.avgopenfee }}</td></tr>
+        <tr><th>avg closing fee</th><td>{{ node.avgclosefee }}</td></tr>
+        <tr><th>capacity</th><td>{{ node.cap }}</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <div>
@@ -49,7 +53,7 @@
 
 <div>
   <h4>all channels</h4>
-  <table class="node-channels-history show-outgoing">
+  <table id="node-channels-table" class="show-outgoing">
     <thead>
       <tr>
         <th>with</th>
@@ -64,7 +68,7 @@
     </thead>
     <tbody>
     {% for channel in channels %}
-      <tr class="{% if channel.close_block > 0 %}closed{% endif %}">
+      <tr id="ch-{{ channel.short_channel_id }}" class="{% if channel.close_block > 0 %}closed{% endif %}">
         <td data-size="{{ channel.peer_size }}"><a href="/node/{{ channel.peer_id }}">{% if channel.peer_name %}{{ channel.peer_name }}{% else %}{{ channel.peer_id | abbr }}{% endif %}</a></td>
         <td><a href="/channel/{{ channel.short_channel_id }}">{{ channel.short_channel_id }}</a></td>
         <td>{{ channel.satoshis }}</td>

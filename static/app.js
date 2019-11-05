@@ -133,7 +133,7 @@ window.addEventListener('load', () => {
 
   // -- node.html
   if (document.getElementById('node-channels-history')) {
-    let table = document.querySelector('table.node-channels-history')
+    let table = document.getElementById('node-channels-table')
 
     // toggle incoming-outgoing fee policy display
     let toggles = table.querySelectorAll('a.toggle-outgoing-incoming')
@@ -322,5 +322,59 @@ window.addEventListener('load', () => {
         }
       ]
     })
+
+    // channels list (insert close events in the list)
+    var closeevents = []
+    let trchannels = document
+      .getElementById('node-channels-table')
+      .querySelectorAll('tbody tr')
+    for (let i = 0; i < trchannels.length; i++) {
+      if (trchannels[i].classList.contains('closed')) {
+        let scid = trchannels[i].id.slice(3)
+        let closeblock = trchannels[i].children[5].innerText.trim()
+        if (closeevents.length && closeevents[0].block === scid) {
+          closeevents[0].channels.push(scid)
+        } else {
+          closeevents.push({block: closeblock, channels: [scid]})
+        }
+      }
+    }
+
+    closeevents.sort((a, b) => parseInt(a.block) - parseInt(b.block))
+
+    // go from bottom to top inserting the rows correspondent to close events
+    for (let i = trchannels.length - 2; i >= 0; i--) {
+      let trbefore = trchannels[i + 1]
+      let block = parseInt(trchannels[i].children[4].innerText.trim())
+      while (parseInt(closeevents[0].block) < block) {
+        trbefore = insertCloseEventRow(trbefore, closeevents.shift())
+      }
+      if (closeevents.length === 0) break
+    }
+
+    // do the same as above, but for the last/upmost row
+    let trbefore = trchannels[0]
+    let block = 9999999
+    while (parseInt(closeevents[0].block) < block) {
+      trbefore = insertCloseEventRow(trbefore, closeevents.shift())
+    }
+
+    function insertCloseEventRow(before, ev) {
+      let closedblock = ev.block
+      let closedscids = ev.channels
+      var trclose = document.createElement('tr')
+      trclose.className = 'close-event'
+      trclose.innerHTML = `<td colspan="4">
+            closed: ${closedscids
+              .map(c => `<a href="#ch-${c}">${c}</a>`)
+              .join(', ')
+              .replace(/\, ([^,]+)$/, (comma, rest) => ' and ' + rest)}
+          </td>
+          <td>${closedblock}</td>
+          <td colspan="2"></td>
+          `
+      before.parentNode.insertBefore(trclose, before)
+      return trclose
+    }
   }
 })
