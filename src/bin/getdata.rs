@@ -12,10 +12,10 @@ extern crate error_chain;
 use docopt::Docopt;
 use rusqlite::types::ToSql;
 use rusqlite::OptionalExtension;
-use rusqlite::{Connection, NO_PARAMS};
+use rusqlite::{params, Connection, NO_PARAMS};
 use serde::Deserialize;
 use std::env;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::bitcoin::*;
 use crate::errors::*;
@@ -468,11 +468,16 @@ CREATE TABLE IF NOT EXISTS policies (
         }
 
         i = 0;
+        // we're determining the close_type only of channels closed more than a week ago
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock changed");
+        let aweekago = now.as_secs() as i64 - 60 * 60 * 24 * 7;
         let mut q = conn.prepare(
             "SELECT short_channel_id, close_transaction FROM channels
-            WHERE close_transaction IS NOT NULL and close_type IS NULL",
+            WHERE close_type IS NULL AND close_time IS NOT NULL and close_time < ?1",
         )?;
-        let mut rows = q.query(NO_PARAMS)?;
+        let mut rows = q.query(params![aweekago])?;
         while let Some(row) = rows.next()? {
             let short_channel_id: String = row.get(0)?;
             let close_transaction: String = row.get(1)?;
