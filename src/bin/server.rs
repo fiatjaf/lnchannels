@@ -54,7 +54,7 @@ SELECT blockgroup,
   sum(opened) AS opened,
   sum(closed) AS closed,
   sum(cap_change) AS cap_change,
-  sum(fee_total) AS fee_total,
+  sum(fee) AS fee_total,
   sum(htlcs) AS htlcs
 FROM (
     -- initial aggregates
@@ -62,7 +62,7 @@ FROM (
       count(*) AS opened,
       0 AS closed,
       sum(satoshis) AS cap_change,
-      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total,
+      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee,
       0 AS htlcs
     FROM channels
     WHERE open_block < ?1
@@ -72,7 +72,7 @@ FROM (
       count(open_block) AS opened,
       0 AS closed,
       sum(satoshis) AS cap_change,
-      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total,
+      sum(coalesce(open_fee, 0)) AS fee,
       0 AS htlcs
     FROM channels
     WHERE open_block >= ?1
@@ -83,8 +83,8 @@ FROM (
       0 AS opened,
       count(close_block) AS closed,
       -sum(satoshis) AS cap_change,
-      coalesce(open_fee, 0) + coalesce(close_fee, 0) AS fee_total,
-      coalesce(close_htlc_count, 0) AS htlcs
+      sum(coalesce(close_fee, 0)) AS fee,
+      sum(coalesce(close_htlc_count, 0)) AS htlcs
     FROM channels
     WHERE close_block IS NOT NULL AND close_block >= ?1
     GROUP BY close_block/100

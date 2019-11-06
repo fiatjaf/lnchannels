@@ -86,7 +86,7 @@ window.addEventListener('load', () => {
           yAxis: 3,
           color: 'rgba(0, 0, 0, 0.5)',
           lineWidth: 1,
-          visible: false
+          visible: Math.random() < 0.08
         },
         {
           name: 'outstanding_htlcs',
@@ -96,7 +96,7 @@ window.addEventListener('load', () => {
           dashStyle: 'Dash',
           color: '#c1a478',
           lineWidth: 1,
-          visible: false
+          visible: Math.random() < 0.2
         }
       ],
       plotOptions
