@@ -50,7 +50,12 @@ fn index() -> Result<Template> {
     let mut outstanding_htlcs: Vec<i64> = Vec::new();
     let mut q = conn.prepare(
         r#"
-SELECT blockgroup, sum(opened) AS opened, sum(closed) AS closed, sum(cap_change) AS cap_change, fee_total, htlcs
+SELECT blockgroup,
+  sum(opened) AS opened,
+  sum(closed) AS closed,
+  sum(cap_change) AS cap_change,
+  sum(fee_total) AS fee_total,
+  sum(htlcs) AS htlcs
 FROM (
     -- initial aggregates
     SELECT ((?1/100)-1)*100 AS blockgroup,
