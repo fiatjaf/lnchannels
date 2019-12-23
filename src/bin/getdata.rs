@@ -1027,19 +1027,19 @@ mod bitcoin {
         pub time: i64,
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     pub struct DecodedTransaction {
         pub txid: String,
         pub vout: Vec<Output>,
         pub vin: Vec<Input>,
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct SegwitScript {
         pub asm: String,
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     pub struct Input {
         pub txid: String,
         pub vout: i64,
@@ -1047,7 +1047,7 @@ mod bitcoin {
         pub txinwitness: Vec<String>,
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     pub struct Output {
         pub n: i64,
         #[serde(rename(deserialize = "scriptPubKey"))]
@@ -1056,7 +1056,7 @@ mod bitcoin {
         pub sat: i64,
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     pub struct ScriptPubKey {
         #[serde(default)]
         pub addresses: Vec<String>,
