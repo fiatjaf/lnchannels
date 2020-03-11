@@ -1,0 +1,136 @@
+{% extends "base" %}
+{% block title %}channel {{ channel.short_channel_id }} | {% endblock title %}
+{% block description %}Information about the Lightning Network channel {{ channel.short_channel_id }} between {{ channel.node0name }} and {{ channel.node1name }}.{% endblock description %}
+
+{% block body %}
+<h1>channel <pre class="id {% if channel.close_block %}closed{% endif %}">{{ channel.short_channel_id }}</pre></h1>
+
+<h4>details</h4>
+<table>
+  <tr>
+    <th>short_channel_id</th>
+    <td>{{ channel.short_channel_id }}</td>
+  </tr>
+  <tr>
+    <th>satoshis</th>
+    <td>{{ channel.satoshis }}</td>
+  </tr>
+  <tr>
+    <th>nodes</th>
+    <td>
+      <table>
+        <tr>
+          <td>{% if channel.node0name %}{{ channel.node0name }}{% else %}{{ channel.node0 | abbr }}{% endif %}</td>
+          <td>{% if channel.node1name %}{{ channel.node1name }}{% else %}{{ channel.node1 | abbr }}{% endif %}</td>
+        </tr>
+        <tr>
+          <td><a href="/node/{{ channel.node0 }}">{{ channel.node0 | abbr }}</a></td>
+          <td><a href="/node/{{ channel.node1 }}">{{ channel.node1 | abbr }}</a></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <th>duration</th>
+    <td>
+      {% if channel.close_block %}
+        {{ channel.close_block - channel.open_block }} blocks
+        <i class="bar" style="width:{{ 100 * (channel.close_block - channel.open_block) / stats.max_channel_duration }}%; background: var(--gold)" />
+      {% else %}
+        {{ stats.last_block - channel.open_block }} blocks and counting
+        <i class="bar" style="width:{{ 100 * (stats.last_block - channel.open_block) / stats.max_channel_duration }}%; background: var(--gold)" />
+      {% endif %}
+    </td>
+  </tr>
+</table>
+
+{% if downwardpolicies or upwardpolicies %}
+  <h4>policy details</h4>
+  <div style="display: flex">
+    <table>
+      <caption>
+        from
+        <code>{% if channel.node0name %}{{ channel.node0name }}{% else %}{{ channel.node0 | abbr }}{% endif %}</code>
+      </caption>
+      <thead>
+        <tr>
+          <th>min fee</th>
+          <th>fee %</th>
+          <th>delay</th>
+          <th>update</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for policy in upwardpolicies %}
+        <tr>
+          <td>{{ policy.base_fee_millisatoshi / 1000 }} sat</td>
+          <td>{{ policy.fee_per_millionth / 10000 }}</td>
+          <td>{{ policy.delay }}</td>
+          <td>{{ policy.update_time | date(format='%a %b %e %T %Y') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <table>
+      <caption>
+        from
+        <code>{% if channel.node1name %}{{ channel.node1name }}{% else %}{{ channel.node1 | abbr }}{% endif %}</code>
+      </caption>
+      <thead>
+        <tr>
+          <th>min fee</th>
+          <th>fee %</th>
+          <th>delay</th>
+          <th>update</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for policy in downwardpolicies %}
+        <tr>
+          <td>{{ policy.base_fee_millisatoshi / 1000 }} sat</td>
+          <td>{{ policy.fee_per_millionth / 10000 }}</td>
+          <td>{{ policy.delay }}</td>
+          <td>{{ policy.update_time | date(format='%a %b %e %T %Y') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+<h4>onchain transactions</h4>
+<table>
+  <tr>
+    <th></th>
+    <th>block</th>
+    <th>transaction</th>
+    <th>fee paid</th>
+  </tr>
+  <tr>
+    <th>open</th>
+    <td><a href="https://blockstream.info/block/{{ channel.open_block }}" title="{{ channel.open_time }}">{{ channel.open_block }}</a></td>
+    <td><a href="https://blockstream.info/tx/{{ channel.open_transaction }}">{{ channel.open_transaction }}</a></td>
+    <td>{{ channel.open_fee }} sat</td>
+  </tr>
+  {% if channel.close_block %}
+    <tr>
+      <th>close</th>
+      <td><a href="https://blockstream.info/block/{{ channel.close_block }}" title="{{ channel.close_time }}">{{ channel.close_block }}</a></td>
+      <td>
+        <a href="https://blockstream.info/tx/{{ channel.close_transaction }}">{{ channel.close_transaction }}</a>
+        {% if channel.close_type %}
+        <div>
+          close type: <strong>{{ channel.close_type }}</strong>
+          {% if channel.close_htlc_count > 0 %}outstanding HTLCs: {{ channel.close_htlc_count }}{% endif %}
+        </div>
+        <div>
+          <em>{{ channel.close_balance_a }} sat</em> ↹ <em>{{ channel.close_balance_b }} sat</em>
+        </div>
+        {% endif %}
+      </td>
+      <td>{{ channel.close_fee }} sat</td>
+    </tr>
+  {% endif %}
+</table>
+
+{% endblock body %}
