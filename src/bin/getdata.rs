@@ -944,7 +944,7 @@ fn getclosetypedata(txid: &String) -> Result<ChannelCloseTypeData> {
 
     // no matter how balances were arranged above, if we detected a penalty we can assume everything is on one side
     if detail.typ == "penalty" {
-        detail.balance_a = detail.balance_b;
+        detail.balance_a += detail.balance_b;
         detail.balance_b = 0;
     }
 
