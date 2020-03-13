@@ -7,11 +7,18 @@ def checkcloses(db):
     )
     for row in c:
         scid, address = row
-        r = requests.get(f"https://blockstream.info/api/address/{address}/txs")
-        r.raise_for_status()
+        try:
+            r = requests.get(f"https://blockstream.info/api/address/{address}/txs")
+        except requests.exceptions.ConnectionError:
+            continue
+        if not r.ok:
+            continue
+
         txs = r.json()
         if len(txs) == 2 and txs[0]["status"]["confirmed"]:
-            # don't multiple by 100000000 here because esplora returns values in sat
+            print(scid, "closed")
+
+            # don't multiply by 100000000 here because esplora returns values in sat
             outputsum = sum([out["value"] for out in txs[0]["vout"]])
             inputsum = sum([inp["prevout"]["value"] for inp in txs[0]["vin"]])
             fee = inputsum - outputsum
@@ -29,3 +36,5 @@ WHERE short_channel_id = ?
                     scid,
                 ),
             )
+        else:
+            print(scid, "not closed")

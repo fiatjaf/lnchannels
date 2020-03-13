@@ -5,7 +5,7 @@ from .listchannels import listchannels
 from .listnodes import listnodes
 from .enrich import enrich
 from .checkcloses import checkcloses
-from .closuretype import closuretype
+from .closuretype import closuretypes
 from .materialize import materialize
 
 db = sqlite3.connect("lnchannels.db", isolation_level=None)
@@ -28,7 +28,7 @@ def main():
     checkcloses(db)
 
     print("determine closure type")
-    closuretype(db)
+    closuretypes(db)
 
     print("materialize")
     materialize(db)

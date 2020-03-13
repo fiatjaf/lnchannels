@@ -6,10 +6,10 @@ SPARK_TOKEN = os.getenv("SPARK_TOKEN")
 
 
 def listchannels(db):
-    r = requests.get(
+    r = requests.post(
         SPARK_URL, headers={"X-Access": SPARK_TOKEN}, json={"method": "listchannels"}
     )
-    for ch in r.json()["chs"]:
+    for ch in r.json()["channels"]:
         node0, node1, towards = (
             (ch["source"], ch["destination"], 1)
             if ch["source"] < ch["destination"]
@@ -64,7 +64,6 @@ VALUES (?, ?, ?, ?, ?, ?)
                     towards,
                     ch["base_fee_millisatoshi"],
                     ch["fee_per_millionth"],
-                    ch["delay"],
                     ch["delay"],
                     ch["last_update"],
                 ),
