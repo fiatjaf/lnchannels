@@ -1,4 +1,5 @@
-import sqlite3
+import os
+import psycopg2
 
 from .schema import schema
 from .listchannels import listchannels
@@ -8,30 +9,40 @@ from .checkcloses import checkcloses
 from .closuretype import closuretypes
 from .materialize import materialize
 
-db = sqlite3.connect("lnchannels.db", isolation_level=None)
+POSTGRES_URL = os.getenv("POSTGRES_URL")
 
 
 def main():
-    print("ensuring database")
-    schema(db)
+    with psycopg2.connect(POSTGRES_URL) as conn:
+        conn.autocommit = True
 
-    print("inserting channels")
-    listchannels(db)
+        with conn.cursor() as db:
+            print("ensuring database")
+            schema(db)
 
-    print("inserting nodes")
-    listnodes(db)
+        with conn.cursor() as db:
+            print("inserting channels")
+            listchannels(db)
 
-    print("enriching")
-    enrich(db)
+        with conn.cursor() as db:
+            print("inserting nodes")
+            listnodes(db)
 
-    print("checking closes")
-    checkcloses(db)
+        with conn.cursor() as db:
+            print("enriching")
+            enrich(db)
 
-    print("determine closure type")
-    closuretypes(db)
+        with conn.cursor() as db:
+            print("checking closes")
+            checkcloses(db)
 
-    print("materialize")
-    materialize(db)
+        with conn.cursor() as db:
+            print("determine closure type")
+            closuretypes(db)
+
+        with conn.cursor() as db:
+            print("materialize")
+            materialize(db)
 
 
 main()
