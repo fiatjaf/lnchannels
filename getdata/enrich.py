@@ -9,7 +9,7 @@ bitcoin = BitcoinRPC(BITCOIN_RPC_ADDRESS, BITCOIN_RPC_USER, BITCOIN_RPC_PASSWORD
 
 
 def enrich(db):
-    c = db.execute("SELECT short_channel_id FROM channels WHERE open_block IS NULL")
+    db.execute("SELECT short_channel_id FROM channels WHERE open_block IS NULL")
     for row in c:
         scid = row[0]
         blockheight, txindex, output = [int(part) for part in scid.split("x")]
@@ -34,8 +34,8 @@ def enrich(db):
         db.execute(
             """
 UPDATE channels
-SET open_block = ?, open_transaction = ?, address = ?, open_time = ?, open_fee = ?
-WHERE short_channel_id = ?
+SET open_block = %s, open_transaction = %s, address = %s, open_time = %s, open_fee = %s
+WHERE short_channel_id = %s
         """,
             (blockheight, txid, address, block["time"], fee, scid),
         )

@@ -2,8 +2,8 @@ import requests
 
 
 def checkcloses(db):
-    c = db.execute(
-        "SELECT short_channel_id, address FROM channels WHERE close_block IS NULL and last_seen < datetime('now', '-1 day')"
+    db.execute(
+        "SELECT short_channel_id, address FROM channels WHERE close_block IS NULL and last_seen < (now() - '1 day'::interval)"
     )
     for row in c:
         scid, address = row
@@ -25,8 +25,8 @@ def checkcloses(db):
             db.execute(
                 """
 UPDATE channels
-SET close_block = ?, close_transaction = ?, close_time = ?, close_fee = ?
-WHERE short_channel_id = ?
+SET close_block = %s, close_transaction = %s, close_time = %s, close_fee = %s
+WHERE short_channel_id = %s
             """,
                 (
                     txs[0]["status"]["block_height"],

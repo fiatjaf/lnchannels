@@ -10,19 +10,19 @@ def listnodes(db):
         SPARK_URL, headers={"X-Access": SPARK_TOKEN}, json={"method": "listnodes"}
     )
     for node in r.json()["nodes"]:
-        c = db.execute(
+        db.execute(
             """
 SELECT last_seen FROM (
     SELECT last_seen, pubkey, alias
     FROM nodealiases
-    WHERE pubkey = ?
+    WHERE pubkey = %s
     ORDER BY last_seen DESC
     LIMIT 1
-) WHERE alias = ?
+) WHERE alias = %s
         """,
             (node["nodeid"], node.get("alias", "")),
         )
-        row = c.fetchone()
+        row = db.fetchone()
 
         # if this alias is already registered just update its last_seen timestamp
         # if it's a new alias for this node, add a new row with it
@@ -32,7 +32,7 @@ SELECT last_seen FROM (
             db.execute(
                 """
 INSERT INTO nodealiases (pubkey, alias, first_seen, last_seen)
-VALUES (?, ?, datetime('now'), datetime('now'))
+VALUES (%s, %s, now(), now())
             """,
                 (node["nodeid"], node.get("alias", "")),
             )
@@ -40,8 +40,8 @@ VALUES (?, ?, datetime('now'), datetime('now'))
             db.execute(
                 """
 UPDATE nodealiases
-SET last_seen = datetime('now')
-WHERE last_seen = ? AND pubkey = ?
+SET last_seen = now()
+WHERE last_seen = %s AND pubkey = %s
             """,
                 (last_seen, node["nodeid"]),
             )

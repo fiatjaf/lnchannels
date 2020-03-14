@@ -10,8 +10,8 @@ bitcoin = BitcoinRPC(BITCOIN_RPC_ADDRESS, BITCOIN_RPC_USER, BITCOIN_RPC_PASSWORD
 
 
 def closuretypes(db):
-    c = db.execute(
-        "SELECT short_channel_id, close_transaction FROM channels WHERE close_type IS NULL AND close_time IS NOT NULL and close_time < datetime('now', '-7 day')"
+    db.execute(
+        "SELECT short_channel_id, close_transaction FROM channels WHERE close_type IS NULL AND close_time IS NOT NULL and close_time < (now() - '7 days'::interval)"
     )
     for row in c:
         scid, close_txid = row
@@ -20,11 +20,11 @@ def closuretypes(db):
             """
 UPDATE channels
   SET
-    close_type = ?,
-    close_balance_a = ?,
-    close_balance_b = ?,
-    close_htlc_count = ?
-WHERE short_channel_id = ?
+    close_type = %s,
+    close_balance_a = %s,
+    close_balance_b = %s,
+    close_htlc_count = %s
+WHERE short_channel_id = %s
         """,
             (typ, bal_a, bal_b, nhtlcs, scid),
         )

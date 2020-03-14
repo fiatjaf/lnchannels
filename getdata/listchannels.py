@@ -19,23 +19,23 @@ def listchannels(db):
         db.execute(
             """
 INSERT INTO channels
-    (short_channel_id, node0, node1, satoshis, last_update, last_seen)
-VALUES (?, ?, ?, ?, ?, datetime('now'))
+    (short_channel_id, node0, node1, satoshis, last_seen)
+VALUES (%s, %s, %s, %s, now())
 ON CONFLICT (short_channel_id)
-    DO UPDATE SET last_seen = excluded.last_seen, last_update = excluded.last_update
+    DO UPDATE SET last_seen = excluded.last_seen
         """,
-            (ch["short_channel_id"], node0, node1, ch["satoshis"], ch["last_update"]),
+            (ch["short_channel_id"], node0, node1, ch["satoshis"]),
         )
 
-        c = db.execute(
+        db.execute(
             """
 SELECT
-  CASE WHEN base_fee_millisatoshi = ? AND fee_per_millionth = ? AND delay = ?
+  CASE WHEN base_fee_millisatoshi = %s AND fee_per_millionth = %s AND delay = %s
     THEN 1
     ELSE 0
   END
 FROM policies
-WHERE short_channel_id = ? AND direction = ?
+WHERE short_channel_id = %s AND direction = %s
 ORDER BY update_time DESC
 LIMIT 1
         """,
@@ -47,7 +47,7 @@ LIMIT 1
                 towards,
             ),
         )
-        row = c.fetchone()
+        row = db.fetchone()
         isfeepolicyuptodate = row[0] if row else False
 
         if not isfeepolicyuptodate:
@@ -57,7 +57,7 @@ INSERT INTO policies
     (short_channel_id, direction,
      base_fee_millisatoshi, fee_per_millionth, delay,
      update_time)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES (%s, %s, %s, %s, %s, %s)
             """,
                 (
                     ch["short_channel_id"],
