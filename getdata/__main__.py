@@ -1,13 +1,11 @@
 import os
 import psycopg2
 
-from .schema import schema
 from .listchannels import listchannels
 from .listnodes import listnodes
 from .enrich import enrich
 from .checkcloses import checkcloses
 from .closuretype import closuretypes
-from .materialize import materialize
 
 POSTGRES_URL = os.getenv("POSTGRES_URL")
 
@@ -15,10 +13,6 @@ POSTGRES_URL = os.getenv("POSTGRES_URL")
 def main():
     with psycopg2.connect(POSTGRES_URL) as conn:
         conn.autocommit = True
-
-        with conn.cursor() as db:
-            print("ensuring database")
-            schema(db)
 
         with conn.cursor() as db:
             print("inserting channels")
@@ -41,8 +35,9 @@ def main():
             closuretypes(db)
 
         with conn.cursor() as db:
-            print("materialize")
-            materialize(db)
+            db.execute("REFRESH MATERIALIZED VIEW nodes")
+            db.execute("REFRESH MATERIALIZED VIEW globalstats")
+            db.execute("REFRESH MATERIALIZED VIEW closetypes")
 
 
 main()
