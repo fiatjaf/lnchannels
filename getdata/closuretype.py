@@ -13,9 +13,14 @@ def closuretypes(db):
     db.execute(
         "SELECT short_channel_id, close_transaction FROM channels WHERE close_type IS NULL AND close_time IS NOT NULL and close_time < (now() - '7 days'::interval)"
     )
-    for row in c:
+    for row in db.fetchall():
         scid, close_txid = row
-        typ, bal_a, bal_b, nhtlcs = closuretype(scid, close_txid)
+
+        try:
+            typ, bal_a, bal_b, nhtlcs = closuretype(scid, close_txid)
+        except ClosureTypeError:
+            continue
+
         db.execute(
             """
 UPDATE channels
@@ -30,6 +35,10 @@ WHERE short_channel_id = %s
         )
 
         print(scid, "closed as", typ, "with", nhtlcs, "htlcs")
+
+
+class ClosureTypeError(Exception):
+    pass
 
 
 def closuretype(scid, close_txid):
@@ -52,9 +61,9 @@ def closuretype(scid, close_txid):
             try:
                 r = requests.get(f"https://blockstream.info/api/address/{address}/txs")
             except requests.exceptions.ConnectionError:
-                return
+                raise ClosureTypeError()
             if not r.ok:
-                return
+                raise ClosureTypeError()
 
             # find the followup transaction and the witness data we need
             # to determine the type of the previous

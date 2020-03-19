@@ -5,7 +5,7 @@ def checkcloses(db):
     db.execute(
         "SELECT short_channel_id, address FROM channels WHERE close_block IS NULL and last_seen < (now() - '1 day'::interval)"
     )
-    for row in c:
+    for row in db.fetchall():
         scid, address = row
         try:
             r = requests.get(f"https://blockstream.info/api/address/{address}/txs")
@@ -25,7 +25,7 @@ def checkcloses(db):
             db.execute(
                 """
 UPDATE channels
-SET close_block = %s, close_transaction = %s, close_time = %s, close_fee = %s
+SET close_block = %s, close_transaction = %s, close_time = to_timestamp(%s), close_fee = %s
 WHERE short_channel_id = %s
             """,
                 (

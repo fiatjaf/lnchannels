@@ -18,7 +18,7 @@ SELECT last_seen FROM (
     WHERE pubkey = %s
     ORDER BY last_seen DESC
     LIMIT 1
-) WHERE alias = %s
+)x WHERE alias = %s
         """,
             (node["nodeid"], node.get("alias", "")),
         )
