@@ -212,28 +212,7 @@ RETURNS TABLE (
   ) AS main
   GROUP BY blockgroup
   ORDER BY blockgroup
-$$ LANGUAGE SQL;
-
-CREATE OR REPLACE FUNCTION closetypes_chart(since_block integer)
-RETURNS TABLE (
-  blockgroup int,
-  unknown bigint,
-  unused bigint,
-  mutual bigint,
-  force bigint,
-  force_unused bigint,
-  penalty bigint
-) AS $$
-  SELECT * FROM (
-    SELECT
-      blockgroup, unknown, unused, mutual, force, force_unused, penalty
-    FROM closetypes
-    WHERE blockgroup >= $1
-    ORDER BY blockgroup DESC
-    LIMIT -1 OFFSET 1
-  )x
-  ORDER BY blockgroup ASC
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION longest_living_channels(last_block int)
 RETURNS TABLE (
@@ -270,7 +249,7 @@ RETURNS TABLE (
       node0, node1, satoshis
     FROM channels
   )x ORDER BY duration DESC LIMIT 50
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION node_channels (pubkey text)
 RETURNS TABLE (
@@ -337,33 +316,56 @@ RETURNS TABLE (
     AND p_in.direction = CASE WHEN node0 = $1 THEN 0 ELSE 1 END
   WHERE node0 = $1 OR node1 = $1
   ORDER BY open_block DESC
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION search(query text)
 RETURNS TABLE (
+  url text,
   kind text,
   label text,
-  url text,
   closed bool
 ) AS $$
-  SELECT
-    'channel' AS kind,
-    short_channel_id || ' (' || satoshis || ' sat)' AS label,
-    '/channel/' || short_channel_id AS url,
-    close_block IS NOT NULL AS closed
-  FROM channels WHERE short_channel_id >= $1 and short_channel_id < $1 || '{'
-UNION ALL
-  SELECT
-    'node' AS kind,
-    alias || ' (' || openchannels || ' channels)' AS label,
-    '/node/' || pubkey AS url,
-    false AS closed
-  FROM nodes WHERE pubkey >= $1 AND pubkey < $1 || '{'
-UNION ALL
-  SELECT 'node ' AS kind, alias || ' (' || openchannels || ' channels)' AS label,
-    '/node/' || nodes.pubkey AS url,
-    false AS closed
-  FROM nodes
-  INNER JOIN (SELECT pubkey FROM nodealiases WHERE alias LIKE '%' || $1 || '%') AS namesearch
-    ON nodes.pubkey = namesearch.pubkey
-$$ LANGUAGE SQL;
+  SELECT DISTINCT ON (url) url, kind, label, closed FROM
+  (
+    SELECT
+      'channel' AS kind,
+      short_channel_id || ' (' || satoshis || ' sat)' AS label,
+      '/channel/' || short_channel_id AS url,
+      close_block IS NOT NULL AS closed
+    FROM channels WHERE short_channel_id >= $1 and short_channel_id < $1 || '{'
+  UNION ALL
+    SELECT
+      'node' AS kind,
+      alias || ' (' || openchannels || ' channels)' AS label,
+      '/node/' || pubkey AS url,
+      false AS closed
+    FROM nodes WHERE pubkey >= $1 AND pubkey < $1 || '{'
+  UNION ALL
+    SELECT 'node' AS kind, alias || ' (' || openchannels || ' channels)' AS label,
+      '/node/' || nodes.pubkey AS url,
+      false AS closed
+    FROM nodes
+    INNER JOIN (SELECT pubkey FROM nodealiases WHERE alias LIKE '%' || $1 || '%') AS namesearch
+      ON nodes.pubkey = namesearch.pubkey
+  )x
+$$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION channel_data (short_channel_id text)
+RETURNS TABLE (
+  open_block int, open_fee int, open_transaction text, open_time timestamp,
+  close_block int, close_fee int, close_transaction text, close_time timestamp,
+  address text, node0 text, node1 text, satoshis int,
+  short_channel_id text, node0name text, node1name text,
+  close_type text, close_htlc_count int, close_balance_a int, close_balance_b int
+) AS $$
+SELECT
+  open_block, open_fee, open_transaction, open_time,
+  close_block, close_fee, close_transaction, close_time,
+  address, node0, node1, satoshis,
+  short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, ''),
+  close_type, close_htlc_count, close_balance_a, close_balance_b
+FROM channels
+LEFT OUTER JOIN nodes AS n0 ON n0.pubkey = node0
+LEFT OUTER JOIN nodes AS n1 ON n1.pubkey = node1
+WHERE short_channel_id = $1
+$$ LANGUAGE SQL STABLE;

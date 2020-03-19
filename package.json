@@ -1,0 +1,15 @@
+{
+  "devDependencies": {
+    "rollup": "^1.32.1",
+    "rollup-plugin-commonjs": "^10.1.0",
+    "rollup-plugin-node-resolve": "^5.2.0",
+    "rollup-plugin-svelte": "^5.1.1",
+    "rollup-plugin-terser": "^4.0.4",
+    "svelte": "^3.20.1"
+  },
+  "dependencies": {
+    "debounce": "^1.2.0",
+    "history": "^4.10.1",
+    "path-to-regexp": "^6.1.0"
+  }
+}
