@@ -160,3 +160,212 @@ GRANT SELECT ON globalstats TO web_anon;
 GRANT SELECT ON closetypes TO web_anon;
 
 CREATE INDEX IF NOT EXISTS index_node ON nodes(pubkey);
+
+CREATE OR REPLACE FUNCTION home_chart(since_block integer)
+RETURNS TABLE (
+  blockgroup int,
+  opened numeric,
+  closed numeric,
+  cap_change numeric(13),
+  fee numeric,
+  htlcs numeric
+) AS $$
+  SELECT blockgroup,
+    sum(opened) AS opened,
+    sum(closed) AS closed,
+    sum(cap_change) AS cap_change,
+    sum(fee) AS fee_total,
+    sum(htlcs) AS htlcs
+  FROM (
+      -- initial aggregates
+      SELECT (($1/100)-1)*100 AS blockgroup,
+        count(*) AS opened,
+        0 AS closed,
+        sum(satoshis) AS cap_change,
+        sum(open_fee) + sum(close_fee) AS fee,
+        0 AS htlcs
+      FROM channels
+      WHERE open_block < $1
+      GROUP BY (($1/100)-1)*100
+    UNION ALL
+      -- ongoing opens
+      SELECT (open_block/100)*100 AS blockgroup,
+        count(open_block) AS opened,
+        0 AS closed,
+        sum(satoshis) AS cap_change,
+        sum(open_fee) AS fee,
+        0 AS htlcs
+      FROM channels
+      WHERE open_block >= $1
+      GROUP BY open_block/100
+    UNION ALL
+      -- ongoing closes
+      SELECT (close_block/100)*100 AS blockgroup,
+        0 AS opened,
+        count(close_block) AS closed,
+        -sum(satoshis) AS cap_change,
+        sum(close_fee) AS fee,
+        sum(close_htlc_count) AS htlcs
+      FROM channels
+      WHERE close_block IS NOT NULL AND close_block >= $1
+      GROUP BY close_block/100
+  ) AS main
+  GROUP BY blockgroup
+  ORDER BY blockgroup
+$$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION longest_living_channels(last_block int)
+RETURNS TABLE (
+  short_channel_id text,
+  open_block int,
+  close_block int,
+  duration int,
+  closed bool,
+  id0 text,
+  name0 text,
+  id1 text,
+  name1 text,
+  satoshis int
+) AS $$
+  SELECT
+    short_channel_id,
+    open_block,
+    close_block,
+    close_block - open_block AS duration,
+    closed,
+    node0 AS id0,
+    coalesce((SELECT alias FROM nodes WHERE pubkey = node0), '') AS name0,
+    node1 AS id1,
+    coalesce((SELECT alias FROM nodes WHERE pubkey = node1), '') AS name1,
+    satoshis
+  FROM (
+    SELECT short_channel_id,
+      open_block,
+      CASE
+        WHEN close_block IS NOT NULL THEN close_block
+        ELSE $1
+      END AS close_block,
+      (close_block IS NOT NULL) AS closed,
+      node0, node1, satoshis
+    FROM channels
+  )x ORDER BY duration DESC LIMIT 50
+$$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION node_channels (pubkey text)
+RETURNS TABLE (
+  short_channel_id text,
+  peer_id text,
+  peer_name text,
+  peer_size bigint,
+  open_block int,
+  open_fee int,
+  close_block int,
+  close_fee int,
+  satoshis int,
+  outgoing_fee_per_millionth numeric(13),
+  outgoing_base_fee_millisatoshi numeric(13),
+  outgoing_delay int,
+  incoming_base_fee_millisatoshi numeric(13),
+  incoming_fee_per_millionth numeric(13),
+  incoming_delay int,
+  close_type text,
+  close_htlc_count int
+) AS $$
+  SELECT
+    channels.short_channel_id,
+    CASE WHEN node0 = $1 THEN node1 ELSE node0 END AS peer_id,
+    coalesce((SELECT alias FROM nodes WHERE pubkey = (CASE WHEN node0 = $1 THEN node1 ELSE node0 END)), '') AS peer_name,
+    coalesce((SELECT capacity FROM nodes WHERE pubkey = (CASE WHEN node0 = $1 THEN node1 ELSE node0 END)), 0) AS peer_size,
+    open_block,
+    open_fee,
+    close_block,
+    close_fee,
+    satoshis,
+    split_part(p_out.fee_per_millionth, '~', 2)::numeric(13) AS outgoing_fee_per_millionth,
+    split_part(p_out.base_fee_millisatoshi, '~', 2)::numeric(13) AS outgoing_base_fee_millisatoshi,
+    split_part(p_out.delay, '~', 2)::int AS outgoing_delay,
+    split_part(p_in.base_fee_millisatoshi, '~', 2)::numeric(13) AS incoming_base_fee_millisatoshi,
+    split_part(p_in.fee_per_millionth, '~', 2)::numeric(13) AS incoming_fee_per_millionth,
+    split_part(p_in.delay, '~', 2)::int AS incoming_delay,
+    close_type,
+    close_htlc_count
+  FROM channels
+  LEFT OUTER JOIN (
+    SELECT
+      short_channel_id,
+      direction,
+      max(update_time || '~' || base_fee_millisatoshi) AS base_fee_millisatoshi,
+      max(update_time || '~' || fee_per_millionth) AS fee_per_millionth,
+      max(update_time || '~' || delay) AS delay
+    FROM policies
+    GROUP BY short_channel_id, direction
+  ) AS p_out
+     ON p_out.short_channel_id = channels.short_channel_id
+    AND p_out.direction = CASE WHEN node0 = $1 THEN 1 ELSE 0 END
+  LEFT OUTER JOIN (
+    SELECT
+      short_channel_id,
+      direction,
+      max(update_time || '~' || base_fee_millisatoshi) AS base_fee_millisatoshi,
+      max(update_time || '~' || fee_per_millionth) AS fee_per_millionth,
+      max(update_time || '~' || delay) AS delay
+    FROM policies
+    GROUP BY short_channel_id, direction
+  ) AS p_in
+     ON p_in.short_channel_id = channels.short_channel_id
+    AND p_in.direction = CASE WHEN node0 = $1 THEN 0 ELSE 1 END
+  WHERE node0 = $1 OR node1 = $1
+  ORDER BY open_block DESC
+$$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION search(query text)
+RETURNS TABLE (
+  url text,
+  kind text,
+  label text,
+  closed bool
+) AS $$
+  SELECT DISTINCT ON (url) url, kind, label, closed FROM
+  (
+    SELECT
+      'channel' AS kind,
+      short_channel_id || ' (' || satoshis || ' sat)' AS label,
+      '/channel/' || short_channel_id AS url,
+      close_block IS NOT NULL AS closed
+    FROM channels WHERE short_channel_id >= $1 and short_channel_id < $1 || '{'
+  UNION ALL
+    SELECT
+      'node' AS kind,
+      alias || ' (' || openchannels || ' channels)' AS label,
+      '/node/' || pubkey AS url,
+      false AS closed
+    FROM nodes WHERE pubkey >= $1 AND pubkey < $1 || '{'
+  UNION ALL
+    SELECT 'node' AS kind, alias || ' (' || openchannels || ' channels)' AS label,
+      '/node/' || nodes.pubkey AS url,
+      false AS closed
+    FROM nodes
+    INNER JOIN (SELECT pubkey FROM nodealiases WHERE alias LIKE '%' || $1 || '%') AS namesearch
+      ON nodes.pubkey = namesearch.pubkey
+  )x
+$$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION channel_data (short_channel_id text)
+RETURNS TABLE (
+  open_block int, open_fee int, open_transaction text, open_time timestamp,
+  close_block int, close_fee int, close_transaction text, close_time timestamp,
+  address text, node0 text, node1 text, satoshis int,
+  short_channel_id text, node0name text, node1name text,
+  close_type text, close_htlc_count int, close_balance_a int, close_balance_b int
+) AS $$
+SELECT
+  open_block, open_fee, open_transaction, open_time,
+  close_block, close_fee, close_transaction, close_time,
+  address, node0, node1, satoshis,
+  short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, ''),
+  close_type, close_htlc_count, close_balance_a, close_balance_b
+FROM channels
+LEFT OUTER JOIN nodes AS n0 ON n0.pubkey = node0
+LEFT OUTER JOIN nodes AS n1 ON n1.pubkey = node1
+WHERE short_channel_id = $1
+$$ LANGUAGE SQL STABLE;

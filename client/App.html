@@ -1,0 +1,86 @@
+<!-- @format -->
+
+<script>
+  import {onMount, setContext} from 'svelte'
+  import debounce from 'debounce'
+  import {createBrowserHistory} from 'history'
+
+  import Index from './App.html'
+  import Node from './Node.html'
+  import Channel from './Channel.html'
+  import NotFound from './NotFound.html'
+
+  const history = createBrowserHistory()
+  var routedComponent
+
+  onMount(() => {
+    history.listen((location, action) => {
+      if (location.pathname === '/') {
+        routedComponent = Index
+      } else if (location.pathname.slice(0, 6) === '/node/') {
+        routedComponent = Node
+      } else if (location.pathname.slice(0, 9) === '/channel/') {
+        routedComponent = Channel
+      } else {
+        routedComponent = NotFound
+      }
+    })
+  })
+
+  function interceptClicks(e) {
+    try {
+      let url = new URL(e.target.href)
+      if (url.hostname === location.hostname) {
+        e.preventDefault()
+        history.push(
+          url.pathname + (url.search ? '?' + url.search : '') + url.hash
+        )
+      }
+    } catch (err) {}
+  }
+
+  setContext('history', history)
+  setContext('first_block', 578600)
+  setContext(
+    'stats',
+    fetch(`/api/globalstats`)
+      .then(r => r.json())
+      .then(s => s[0])
+  )
+
+  var searchQuery = ''
+  var searchResults
+  const search = debounce(async function() {
+    searchResults = await (
+      await fetch(`/api/rcp/search?query=${searchQuery}`)
+    ).json()[0]
+  }, 1200)
+</script>
+
+<style>
+  .hidden {
+    display: none;
+  }
+</style>
+
+<svelte:window on:click="{interceptClicks}" />
+
+<nav class="top-bar">
+  <a href="/" class="top-bar-title">ln.bigsun.xyz</a>
+  <input
+    on:input="{search}"
+    placeholder="search node id or name, channel id or block"
+  />
+
+  <div class="top-bar-right">
+    <a href="/static/lnchannels.db" class="top-bar-link">download all data</a>
+    <a href="https://twitter.com/fiatjaf" class="top-bar-link">@fiatjaf</a>
+  </div>
+</nav>
+
+<div id="searchresults"></div>
+<div class:hidden="{searchResults.length}">
+  {#if routedComponent}
+  <svelte:component this="{routedComponent}" />
+  {/if}
+</div>

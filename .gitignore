@@ -9,3 +9,6 @@
 *.pyo
 venv
 .pyre
+static/bundle.*
+node_modules
+bigsun_missing.pkl
