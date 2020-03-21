@@ -2,18 +2,19 @@
 
 <script>
   import {onMount, getContext} from 'svelte'
-  import {abbr, date, plotOptions} from './helpers'
+  import {abbr, date} from './helpers'
+
+  import NodeHistory from './charts/NodeHistory.html'
+  import Bubbles from './charts/Bubbles.html'
+
+  var loading = true
 
   var node = {}
   var aliases = []
   var channels = []
-  var stats = {}
 
   var maxfee = 0
   var maxcap = 0
-
-  var chartBubbles
-  var chartHistory
 
   const id = getContext('history')
     .location.pathname.split('/')
@@ -27,8 +28,6 @@
   }
 
   onMount(async () => {
-    stats = await getContext('stats')
-
     let res = await Promise.all([
       fetch(`/api/nodes?pubkey=eq.${id}`).then(r => r.json()),
       fetch(
@@ -36,166 +35,22 @@
       ).then(r => r.json()),
       fetch(`/api/rpc/node_channels?pubkey=${id}`).then(r => r.json())
     ])
+
+    loading = false
+
     node = res[0][0]
     aliases = res[1]
     channels = res[2]
 
     node.name = node.alias ? `"${node.alias}"` : abbr(node.pubkey)
 
-    // gather info
-    var blockmap = {}
-    var opens = {}
-    var closes = {}
-    var open_sats = {}
-    var close_sats = {}
-    var openchannelsbubbles = []
-
     for (let i = channels.length - 1; i >= 0; i--) {
-      let chan = channels[i]
-
-      // gather data for the chart
-      opens[chan.open_block] = opens[chan.open_block] || 0
-      open_sats[chan.open_block] = open_sats[chan.open_block] || 0
-      opens[chan.open_block]++
-      open_sats[chan.open_block] += chan.satoshis
-      blockmap[chan.open_block] = true
-
-      if (chan.close_block) {
-        // if it's closed gather close data
-        closes[chan.close_block] = closes[chan.close_block] || 0
-        close_sats[chan.close_block] = close_sats[chan.close_block] || 0
-        closes[chan.close_block]++
-        close_sats[chan.close_block] += chan.satoshis
-        blockmap[chan.close_block] = true
-      } else {
-        // if it's open add to bubble chart
-        openchannelsbubbles.push({
-          x: chan.open_block,
-          y: chan.satoshis,
-          z: chan.peer_size,
-          name: chan.peer_name,
-          scid: chan.short_channel_id
-        })
-      }
-
       // data for the microcharts later
+      let chan = channels[i]
       let fee = chan.open_fee + (chan.close_fee || 0)
       maxfee = fee > maxfee ? fee : maxfee
       maxcap = chan.satoshis > maxcap ? chan.satoshis : maxcap
     }
-
-    // insert last block if not exists (so the chart is not stuck in a past position)
-    if (!(stats.last_block in blockmap)) {
-      blockmap[stats.last_block] = true
-    }
-
-    // make main chart
-    let blocks = Object.keys(blockmap).sort()
-    var openings = []
-    var closings = []
-    var total = []
-    var capacity = []
-
-    for (let i = 0; i < blocks.length; i++) {
-      let b = blocks[i]
-      let x = parseInt(b)
-      openings.push([x, opens[b] || 0])
-      closings.push([x, closes[b] || 0])
-      total.push([
-        x,
-        (total.length > 0 ? total[i - 1][1] : 0) +
-          (opens[b] || 0) -
-          (closes[b] || 0)
-      ])
-      capacity.push([
-        x,
-        (capacity.length > 0 ? capacity[i - 1][1] : 0) +
-          (open_sats[b] || 0) -
-          (close_sats[b] || 0)
-      ])
-    }
-
-    H.chart(chartHistory, {
-      title: {text: ''},
-      yAxis: [{visible: false}, {visible: false}, {visible: false}],
-      series: [
-        {
-          name: 'capacity (sat)',
-          type: 'area',
-          data: capacity,
-          step: 'left',
-          yAxis: 2,
-          color: 'var(--gold)'
-        },
-        {
-          name: 'total',
-          type: 'area',
-          data: total,
-          step: 'left',
-          yAxis: 1,
-          color: 'var(--blue)'
-        },
-        {
-          name: 'openings',
-          type: 'column',
-          data: openings,
-          yAxis: 0,
-          color: 'var(--green)',
-          borderWidth: 1
-        },
-        {
-          name: 'closings',
-          type: 'column',
-          data: closings,
-          yAxis: 0,
-          color: 'var(--red)',
-          borderWidth: 1
-        }
-      ],
-      plotOptions
-    })
-
-    // channel bubbles
-    H.chart(chartBubbles, {
-      title: {text: ''},
-      yAxis: [{title: {text: 'channel size (sat)', enabled: null}, floor: 0}],
-      series: [
-        {
-          type: 'bubble',
-          data: openchannelsbubbles,
-          marker: {fillColor: 'var(--gold)'},
-          showInLegend: false,
-          minSize: '1%',
-          maxSize: '30%',
-          sizeBy: 'width',
-          dataLabels: {
-            enabled: true,
-            format: '{point.name}',
-            style: {
-              color: 'black',
-              textOutline: 'none',
-              fontWeight: 'normal'
-            }
-          },
-          tooltip: {
-            headerFormat: '',
-            followPointer: true,
-            followTouchMove: true,
-            pointFormat: '{point.name}: {point.y}',
-            valueSuffix: ' sat'
-          },
-          events: {
-            click: e => {
-              document.getElementById(`ch-${e.point.scid}`).scrollIntoView({
-                behavior: 'smooth',
-                block: 'start',
-                inline: 'nearest'
-              })
-            }
-          }
-        }
-      ]
-    })
 
     // channels list (insert close events in the list)
     // var closeevents = []
@@ -297,6 +152,7 @@
   />
 </svelte:head>
 
+{#if loading} loading {:else}
 <h1>
   node
   <pre class="id">{node.pubkey}</pre>
@@ -359,12 +215,12 @@
 
 <div>
   <h4>channel variation</h4>
-  <div id="channels-history" bind:this="{chartHistory}" />
+  <NodeHistory channels="{channels}" />
 </div>
 
 <div>
   <h4>current channels</h4>
-  <div id="channels-bubble" bind:this="{chartBubbles}" />
+  <Bubbles channels="{channels}" />
 </div>
 
 <div>
@@ -448,3 +304,4 @@
     </tbody>
   </table>
 </div>
+{/if}

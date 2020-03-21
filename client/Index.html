@@ -4,29 +4,19 @@
   import {onMount, getContext} from 'svelte'
   import {abbr, plotOptions} from './helpers'
 
+  import HomeChart from './charts/HomeChart.html'
+  import CloseTypes from './charts/CloseTypes.html'
+
+  var loading = true
+
   const first_block = getContext('first_block')
 
-  var blocks = []
-  var openings = []
-  var closings = []
-  var total = []
-  var capacity = []
-  var fee_total = []
-  var outstanding_htlcs = []
-
+  var homechart
+  var closetypes
   var closeblocks = []
-  var closetypeaggregates = {
-    unknown: [],
-    unused: [],
-    mutual: [],
-    force: [],
-    force_unused: [],
-    penalty: []
-  }
 
   var longestliving = []
   var allnodes = []
-
   var stats = {}
 
   onMount(async () => {
@@ -56,44 +46,12 @@
       ).then(r => r.json())
     ])
 
-    let homechart = res[0]
-    let closetypes = res[1]
+    loading = false
+
+    homechart = res[0]
+    closetypes = res[1]
     longestliving = res[2]
     allnodes = res[3]
-
-    for (let i = 0; i < homechart.length; i++) {
-      let {blockgroup, opened, closed, cap_change, fee, htlcs} = homechart[i]
-      blocks.push(blockgroup)
-      openings.push(opened)
-      closings.push(closed)
-      total.push(
-        (total.length > 0 ? total[total.length - 1] : 0) + opened - closed
-      )
-      capacity.push(
-        (capacity.length > 0 ? capacity[capacity.length - 1] : 0) +
-          cap_change / 100000000
-      )
-      fee_total.push(fee)
-      outstanding_htlcs.push(htlcs)
-    }
-    blocks = blocks.slice(1)
-    openings = openings.slice(1)
-    closings = closings.slice(1)
-    total = total.slice(1)
-    capacity = capacity.slice(1)
-    fee_total = fee_total.slice(1)
-    outstanding_htlcs = outstanding_htlcs.slice(1)
-
-    for (let i = 0; i < closetypes.length; i++) {
-      let ct = closetypes[i]
-      closeblocks.push(ct.blockgroup)
-      closetypeaggregates.unknown.push(ct.unknown)
-      closetypeaggregates.unused.push(ct.unused)
-      closetypeaggregates.mutual.push(ct.mutual)
-      closetypeaggregates.force.push(ct.force)
-      closetypeaggregates.force_unused.push(ct.force_unused)
-      closetypeaggregates.penalty.push(ct.penalty)
-    }
 
     H.chart('open-close', {
       title: {text: ''},
@@ -162,44 +120,17 @@
       ],
       plotOptions
     })
-
-    H.chart('close-types', {
-      title: {text: ''},
-      chart: {type: 'areaspline'},
-      xAxis: {
-        categories: closeblocks.map(b => b.toString().slice(0, -2) + '__')
-      },
-      yAxis: [
-        {visible: false},
-        {visible: false},
-        {visible: false},
-        {visible: false},
-        {visible: false}
-      ],
-      series: [
-        ['unknown', '#e4dfda'],
-        ['unused', 'var(--green)'],
-        ['mutual', 'var(--blue)'],
-        ['force', '#f58f29'],
-        ['force_unused', '#7d4600'],
-        ['penalty', 'var(--red)']
-      ].map(([name, color]) => ({
-        name,
-        data: closetypeaggregates[name],
-        color
-      })),
-      plotOptions: {...plotOptions, areaspline: {stacking: 'percent'}}
-    })
   })
 </script>
 
+{#if loading} loading {:else}
 <div>
   <h4>history of the open network</h4>
-  <div id="open-close" />
+  <HomeChart homechart="{homechart}" />
 </div>
 <div>
   <h4>types of channel closes</h4>
-  <div id="close-types" />
+  <CloseTypes closetypes="{closetypes}" />
 </div>
 <div>
   <h4>some of the biggest nodes</h4>
@@ -303,3 +234,4 @@
     </tbody>
   </table>
 </div>
+{/if}

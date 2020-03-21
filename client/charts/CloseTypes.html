@@ -1,0 +1,61 @@
+<!-- @format -->
+
+<script>
+  import {onMount} from 'svelte'
+
+  export let closetypes
+
+  var el
+
+  onMount(() => {
+    var closetypeaggregates = {
+      unknown: [],
+      unused: [],
+      mutual: [],
+      force: [],
+      force_unused: [],
+      penalty: []
+    }
+
+    for (let i = 0; i < closetypes.length; i++) {
+      let ct = closetypes[i]
+      closeblocks.push(ct.blockgroup)
+      closetypeaggregates.unknown.push(ct.unknown)
+      closetypeaggregates.unused.push(ct.unused)
+      closetypeaggregates.mutual.push(ct.mutual)
+      closetypeaggregates.force.push(ct.force)
+      closetypeaggregates.force_unused.push(ct.force_unused)
+      closetypeaggregates.penalty.push(ct.penalty)
+    }
+
+    H.chart(el, {
+      title: {text: ''},
+      chart: {type: 'areaspline'},
+      xAxis: {
+        categories: closeblocks.map(b => b.toString().slice(0, -2) + '__')
+      },
+      yAxis: [
+        {visible: false},
+        {visible: false},
+        {visible: false},
+        {visible: false},
+        {visible: false}
+      ],
+      series: [
+        ['unknown', '#e4dfda'],
+        ['unused', 'var(--green)'],
+        ['mutual', 'var(--blue)'],
+        ['force', '#f58f29'],
+        ['force_unused', '#7d4600'],
+        ['penalty', 'var(--red)']
+      ].map(([name, color]) => ({
+        name,
+        data: closetypeaggregates[name],
+        color
+      })),
+      plotOptions: {...plotOptions, areaspline: {stacking: 'percent'}}
+    })
+  })
+</script>
+
+<div bind:this="{el}" />

@@ -1,0 +1,114 @@
+<!-- @format -->
+
+<script>
+  import {onMount, getContext} from 'svelte'
+  import {plotOptions} from '../helpers'
+
+  export let channels
+
+  var el
+
+  onMount(async () => {
+    let stats = await getContext('stats')
+
+    // gather info
+    var blockmap = {}
+    var opens = {}
+    var closes = {}
+    var open_sats = {}
+    var close_sats = {}
+
+    for (let i = channels.length - 1; i >= 0; i--) {
+      let chan = channels[i]
+
+      // gather data for the chart
+      opens[chan.open_block] = opens[chan.open_block] || 0
+      open_sats[chan.open_block] = open_sats[chan.open_block] || 0
+      opens[chan.open_block]++
+      open_sats[chan.open_block] += chan.satoshis
+      blockmap[chan.open_block] = true
+
+      if (chan.close_block) {
+        // if it's closed gather close data
+        closes[chan.close_block] = closes[chan.close_block] || 0
+        close_sats[chan.close_block] = close_sats[chan.close_block] || 0
+        closes[chan.close_block]++
+        close_sats[chan.close_block] += chan.satoshis
+        blockmap[chan.close_block] = true
+      }
+    }
+
+    // make main chart
+    let blocks = Object.keys(blockmap).sort()
+    var openings = []
+    var closings = []
+    var total = []
+    var capacity = []
+
+    for (let i = 0; i < blocks.length; i++) {
+      let b = blocks[i]
+      let x = parseInt(b)
+      openings.push([x, opens[b] || 0])
+      closings.push([x, closes[b] || 0])
+      total.push([
+        x,
+        (total.length > 0 ? total[i - 1][1] : 0) +
+          (opens[b] || 0) -
+          (closes[b] || 0)
+      ])
+      capacity.push([
+        x,
+        (capacity.length > 0 ? capacity[i - 1][1] : 0) +
+          (open_sats[b] || 0) -
+          (close_sats[b] || 0)
+      ])
+    }
+
+    // insert last block if not exists (so the chart is not stuck in a past position)
+    if (!(stats.last_block in blockmap)) {
+      blockmap[stats.last_block] = true
+    }
+
+    H.chart(el, {
+      title: {text: ''},
+      yAxis: [{visible: false}, {visible: false}, {visible: false}],
+      series: [
+        {
+          name: 'capacity (sat)',
+          type: 'area',
+          data: capacity,
+          step: 'left',
+          yAxis: 2,
+          color: 'var(--gold)'
+        },
+        {
+          name: 'total',
+          type: 'area',
+          data: total,
+          step: 'left',
+          yAxis: 1,
+          color: 'var(--blue)'
+        },
+        {
+          name: 'openings',
+          type: 'column',
+          data: openings,
+          yAxis: 0,
+          color: 'var(--green)',
+          borderWidth: 1
+        },
+        {
+          name: 'closings',
+          type: 'column',
+          data: closings,
+          yAxis: 0,
+          color: 'var(--red)',
+          borderWidth: 1
+        }
+      ],
+      plotOptions
+    })
+  })
+</script>
+
+<div bind:this="{el}" />
