@@ -39,6 +39,74 @@
     capacity = capacity.slice(1)
     fee_total = fee_total.slice(1)
     outstanding_htlcs = outstanding_htlcs.slice(1)
+
+    H.chart(el, {
+      title: {text: ''},
+      xAxis: {
+        categories: blocks.map(b => b.toString().slice(0, -2) + '__')
+      },
+      yAxis: [
+        {visible: false},
+        {visible: false},
+        {visible: false},
+        {visible: false},
+        {visible: false}
+      ],
+      series: [
+        {
+          name: 'capacity (btc)',
+          type: 'area',
+          data: capacity,
+          step: 'left',
+          yAxis: 2,
+          color: 'var(--gold)'
+        },
+        {
+          name: 'total',
+          type: 'area',
+          data: total,
+          step: 'left',
+          yAxis: 1,
+          color: 'var(--blue)'
+        },
+        {
+          name: 'openings',
+          type: 'column',
+          data: openings,
+          yAxis: 0,
+          color: 'var(--green)',
+          borderWidth: 1
+        },
+        {
+          name: 'closings',
+          type: 'column',
+          data: closings,
+          yAxis: 0,
+          color: 'var(--red)',
+          borderWidth: 1
+        },
+        {
+          name: 'onchain fee total',
+          type: 'spline',
+          data: fee_total,
+          yAxis: 3,
+          color: 'rgba(0, 0, 0, 0.5)',
+          lineWidth: 1,
+          visible: Math.random() < 0.08
+        },
+        {
+          name: 'outstanding_htlcs',
+          type: 'spline',
+          data: outstanding_htlcs,
+          yAxis: 4,
+          dashStyle: 'Dash',
+          color: '#c1a478',
+          lineWidth: 1,
+          visible: Math.random() < 0.2
+        }
+      ],
+      plotOptions
+    })
   })
 </script>
 

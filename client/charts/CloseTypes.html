@@ -2,12 +2,14 @@
 
 <script>
   import {onMount} from 'svelte'
+  import {plotOptions} from '../helpers'
 
   export let closetypes
 
   var el
 
   onMount(() => {
+    var closeblocks = []
     var closetypeaggregates = {
       unknown: [],
       unused: [],
