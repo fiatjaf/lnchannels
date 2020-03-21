@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS channels (
   satoshis integer,
   last_seen timestamp NOT NULL
 );
+CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id);
+CREATE INDEX IF NOT EXISTS index_node0 ON channels(node0);
+CREATE INDEX IF NOT EXISTS index_node1 ON channels(node1);
+GRANT SELECT ON channels TO web_anon;
 
 CREATE TABLE IF NOT EXISTS nodealiases (
   pubkey text NOT NULL,
@@ -25,6 +29,8 @@ CREATE TABLE IF NOT EXISTS nodealiases (
   first_seen timestamp NOT NULL,
   last_seen timestamp NOT NULL
 );
+CREATE INDEX IF NOT EXISTS index_pubkey ON nodealiases(pubkey);
+GRANT SELECT ON nodealiases TO web_anon;
 
 CREATE TABLE IF NOT EXISTS policies (
   short_channel_id text NOT NULL,
@@ -34,18 +40,10 @@ CREATE TABLE IF NOT EXISTS policies (
   delay integer NOT NULL,
   update_time timestamp NOT NULL
 );
-
-GRANT SELECT ON channels TO web_anon;
-GRANT SELECT ON nodealiases TO web_anon;
 GRANT SELECT ON policies TO web_anon;
 
-CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id);
-CREATE INDEX IF NOT EXISTS index_node0 ON channels(node0);
-CREATE INDEX IF NOT EXISTS index_node1 ON channels(node1);
-CREATE INDEX IF NOT EXISTS index_pubkey ON nodealiases(pubkey);
-
 CREATE MATERIALIZED VIEW nodes AS
-  WITH node AS (
+  WITH nodealias AS (
     SELECT
       pubkey,
       (SELECT alias FROM nodealiases AS n WHERE nodealiases.pubkey = n.pubkey ORDER BY last_seen DESC LIMIT 1) AS alias
@@ -70,8 +68,8 @@ CREATE MATERIALIZED VIEW nodes AS
     )z GROUP BY pubkey
   )
   SELECT
-    node.pubkey AS pubkey,
-    node.alias AS alias,
+    open.pubkey AS pubkey,
+    coalesce(nodealias.alias, '') AS alias,
     agg.oldestchannel AS oldestchannel,
     open.openchannels AS openchannels,
     agg.closedchannels AS closedchannels,
@@ -79,9 +77,11 @@ CREATE MATERIALIZED VIEW nodes AS
     agg.avg_duration AS avg_duration,
     agg.avg_open_fee AS avg_open_fee,
     agg.avg_close_fee AS avg_close_fee
-  FROM node
-  INNER JOIN open ON open.pubkey = node.pubkey
-  INNER JOIN agg ON agg.pubkey = node.pubkey;
+  FROM open
+  LEFT JOIN nodealias ON open.pubkey = nodealias.pubkey
+  INNER JOIN agg ON agg.pubkey = open.pubkey;
+CREATE INDEX IF NOT EXISTS index_node ON nodes(pubkey);
+GRANT SELECT ON nodes TO web_anon;
 
 CREATE MATERIALIZED VIEW globalstats AS
   WITH last_block AS (
@@ -128,6 +128,7 @@ CREATE MATERIALIZED VIEW globalstats AS
     nodes.max_average_open_fee  AS max_node_average_open_fee,
     nodes.max_average_close_fee AS max_node_average_close_fee
   FROM channels, nodes;
+GRANT SELECT ON globalstats TO web_anon;
 
 CREATE MATERIALIZED VIEW closetypes AS
   WITH dchannels AS (
@@ -154,12 +155,7 @@ CREATE MATERIALIZED VIEW closetypes AS
   WHERE blockgroup IS NOT NULL
   GROUP BY blockgroup
   ORDER BY blockgroup;
-
-GRANT SELECT ON nodes TO web_anon;
-GRANT SELECT ON globalstats TO web_anon;
 GRANT SELECT ON closetypes TO web_anon;
-
-CREATE INDEX IF NOT EXISTS index_node ON nodes(pubkey);
 
 CREATE OR REPLACE FUNCTION home_chart(since_block integer)
 RETURNS TABLE (

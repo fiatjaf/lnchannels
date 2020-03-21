@@ -5,32 +5,44 @@
   import debounce from 'debounce'
   import {createBrowserHistory} from 'history'
 
-  import Index from './App.html'
+  import Index from './Index.html'
   import Node from './Node.html'
   import Channel from './Channel.html'
+  import API from './API.html'
   import NotFound from './NotFound.html'
 
   const history = createBrowserHistory()
   var routedComponent
 
   onMount(() => {
-    history.listen((location, action) => {
+    history.listen(route)
+    route(history.location)
+  })
+
+  function route(location, action) {
+    routedComponent = null
+    setTimeout(() => {
       if (location.pathname === '/') {
         routedComponent = Index
       } else if (location.pathname.slice(0, 6) === '/node/') {
         routedComponent = Node
       } else if (location.pathname.slice(0, 9) === '/channel/') {
         routedComponent = Channel
+      } else if (location.pathname === '/docs') {
+        routedComponent = API
       } else {
         routedComponent = NotFound
       }
-    })
-  })
+    }, 0)
+  }
 
   function interceptClicks(e) {
     try {
       let url = new URL(e.target.href)
-      if (url.hostname === location.hostname) {
+      if (
+        url.hostname === location.hostname &&
+        url.pathname !== location.pathname
+      ) {
         e.preventDefault()
         history.push(
           url.pathname + (url.search ? '?' + url.search : '') + url.hash
@@ -41,25 +53,46 @@
 
   setContext('history', history)
   setContext('first_block', 578600)
+
+  var globalStatsResolve
+  var globalStatsReject
+
   setContext(
     'stats',
-    fetch(`/api/globalstats`)
-      .then(r => r.json())
-      .then(s => s[0])
+    new Promise((resolve, reject) => {
+      globalStatsResolve = resolve
+      globalStatsReject = reject
+    })
   )
 
+  onMount(() => {
+    fetch(`/api/globalstats`)
+      .then(r => r.json())
+      .then(s => globalStatsResolve(s[0]))
+      .catch(globalStatsReject)
+  })
+
   var searchQuery = ''
-  var searchResults
+  var searchResults = []
   const search = debounce(async function() {
+    if (searchQuery === '') return
     searchResults = await (
-      await fetch(`/api/rcp/search?query=${searchQuery}`)
-    ).json()[0]
+      await fetch(`/api/rpc/search?query=${searchQuery}`)
+    ).json()
   }, 1200)
 </script>
 
 <style>
-  .hidden {
-    display: none;
+  .search-item {
+    font-family: monospace;
+    padding: 0.1em 0.4em;
+  }
+  .search-item:hover {
+    background: whitesmoke;
+  }
+  .search-item a {
+    text-decoration: none;
+    color: inherit;
   }
 </style>
 
@@ -67,19 +100,37 @@
 
 <nav class="top-bar">
   <a href="/" class="top-bar-title">ln.bigsun.xyz</a>
-  <input
-    on:input="{search}"
-    placeholder="search node id or name, channel id or block"
-  />
+  <div class="top-bar-link top-bar-title" style="width: 60%">
+    <input
+      bind:value="{searchQuery}"
+      on:input="{search}"
+      placeholder="search node id or name, channel id or block"
+      style="width: 100%"
+    />
+  </div>
 
   <div class="top-bar-right">
-    <a href="/static/lnchannels.db" class="top-bar-link">download all data</a>
-    <a href="https://twitter.com/fiatjaf" class="top-bar-link">@fiatjaf</a>
+    <a href="/docs" class="top-bar-link">API</a>
   </div>
 </nav>
 
-<div id="searchresults"></div>
-<div class:hidden="{searchResults.length}">
+{#if searchQuery.length}
+<div id="searchresults">
+  <ul>
+    {#each searchResults as result}
+    <li class:closed="{result.closed}" class="search-item">
+      <a href="{result.url}">
+        ({result.kind}) {result.label}
+      </a>
+    </li>
+    {:else}
+    <p>No results found for query "{searchQuery}".</p>
+    {/each}
+  </ul>
+</div>
+{/if}
+
+<div class:hidden="{searchQuery.length}">
   {#if routedComponent}
   <svelte:component this="{routedComponent}" />
   {/if}

@@ -2,12 +2,12 @@
 
 <script>
   import {onMount, getContext} from 'svelte'
-  import {abbr} from './helpers'
+  import {abbr, date} from './helpers'
 
-  var channel
+  var channel = {}
   var upwardpolicies = []
   var downwardpolicies = []
-  var stats
+  var stats = {}
 
   const id = getContext('history')
     .location.pathname.split('/')
@@ -23,13 +23,13 @@
       ).then(r => r.json())
     ])
 
-    channel = res[0][0]
-
     let policies = res[1]
     for (let i = 0; i < policies.length; i++) {
       let policy = policies[i]
-      ;[downwardpolicies, upwardpolicies][policty.direction].push(policy)
+      ;[downwardpolicies, upwardpolicies][policy.direction].push(policy)
     }
+
+    channel = res[0][0]
   })
 </script>
 
@@ -127,7 +127,7 @@
         <td>{policy.base_fee_millisatoshi / 1000} sat</td>
         <td>{policy.fee_per_millionth / 10000}</td>
         <td>{policy.delay}</td>
-        <td>{(new Date(policy.update_time)).toGMTString()}</td>
+        <td>{date(policy.update_time)}</td>
       </tr>
       {/each}
     </tbody>
@@ -154,7 +154,7 @@
         <td>{policy.base_fee_millisatoshi / 1000} sat</td>
         <td>{policy.fee_per_millionth / 10000}</td>
         <td>{policy.delay}</td>
-        <td>{(new Date(policy.update_time)).toGMTString()}</td>
+        <td>{date(policy.update_time)}</td>
       </tr>
       {/each}
     </tbody>

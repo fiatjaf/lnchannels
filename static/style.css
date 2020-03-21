@@ -34,29 +34,6 @@ pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
   justify-content: space-between;
 }
 
-#node-channels-bubble .highcharts-point { fill: var(--gold) }
-#node-channels-bubble .highcharts-point, #node-channels-bubble .highcharts-data-label { cursor: pointer; }
-
-#node-channels-table .toggle-outgoing-incoming {
-  cursor: pointer;
-  text-decoration: none;
-  border-style: dotted;
-  border-width: 0 0 3px 0;
+.hidden {
+  display: none;
 }
-#node-channels-table .toggle-outgoing-incoming:hover { border-style: dashed; }
-#node-channels-table.show-outgoing .col-incoming { display: none; }
-#node-channels-table.show-incoming .col-outgoing { display: none; }
-#node-channels-table tr.close-event {
-  background-color: #e8dcdc;
-  opacity: 0.7;
-}
-#node-channels-table tr.close-event td {
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-left: 20px;
-}
-
-#search { margin: 0.8rem 12px; width: 25%; min-width: 300px; font-size: 0.8em; }
-.search-item { font-family: monospace; padding: 0.1em 0.4em; }
-.search-item:hover { background: whitesmoke; }
-.search-item a { text-decoration: none; color: inherit; }

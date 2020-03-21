@@ -1,11 +1,9 @@
 <!-- @format -->
 
 <script>
-  import {onMount} from 'svelte'
-  import {getRoute} from '@svel/router'
-  import {abbr} from './helpers'
+  import {onMount, getContext} from 'svelte'
+  import {abbr, plotOptions} from './helpers'
 
-  const route = getRoute()
   const first_block = getContext('first_block')
 
   var blocks = []
@@ -17,177 +15,180 @@
   var outstanding_htlcs = []
 
   var closeblocks = []
-  var unknown = []
-  var unused = []
-  var mutual = []
-  var force = []
-  var force_unused = []
-  var penalty = []
+  var closetypeaggregates = {
+    unknown: [],
+    unused: [],
+    mutual: [],
+    force: [],
+    force_unused: [],
+    penalty: []
+  }
 
   var longestliving = []
   var allnodes = []
 
-  onMount(() => {
-    route.subscribe(async value => {
-      let stats = getContext('stats')
+  var stats = {}
 
-      let res = await Promise.all([
-        fetch(`/api/rpc/home_chart?since_block=${first_block}`).then(r =>
-          r.json()
-        ),
-        fetch(`/api/closetypes?blockgroup=gt.${first_block}`, {
+  onMount(async () => {
+    stats = await getContext('stats')
+
+    let res = await Promise.all([
+      fetch(`/api/rpc/home_chart?since_block=${first_block}`).then(r =>
+        r.json()
+      ),
+      fetch(`/api/closetypes?blockgroup=gt.${first_block}`, {
+        headers: {
+          'Range-Unit': 'items',
+          Range: '1-'
+        }
+      }).then(r => r.json()),
+      fetch(
+        `/api/rpc/longest_living_channels?last_block=${stats.last_block}`
+      ).then(r => r.json()),
+      fetch(
+        `/api/nodes?openchannels=gt.0&order=openchannels.desc&select=pubkey,alias,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity`,
+        {
           headers: {
             'Range-Unit': 'items',
-            Range: '1-'
+            Range: '0-49'
           }
-        }).then(r => r.json()),
-        fetch(`/api/rpc/longestliving?last_block=${stats.last_block}`).then(r =>
-          r.json()
-        ),
-        fetch(
-          `/api/nodes?openchannels=gt.0&order=openchannels.desc&select=pubkey,alias,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity`,
-          {
-            headers: {
-              'Range-Unit': 'items',
-              Range: '0-100'
-            }
-          }
-        ).then(r => r.json())
-      ])
+        }
+      ).then(r => r.json())
+    ])
 
-      let homechart = res[0]
-      let closetypes = res[1]
-      longestliving = res[2]
-      allnodes = res[3]
+    let homechart = res[0]
+    let closetypes = res[1]
+    longestliving = res[2]
+    allnodes = res[3]
 
-      for (let i = 0; i < homechart.length; i++) {
-        let {blockgroup, opened, closed, cap_change, fee, htlcs} = homechart[i]
-        blocks.push(blockgroup)
-        openings.push(opened)
-        closings.push(closed)
-        total.push(
-          total.length > 0 ? total[total.length - 1] : 0 + opened - closed
-        )
-        capacity.push(
-          capacity.length > 0
-            ? capacity[capacity.length - 1]
-            : 0 + cap_change / 100000000
-        )
-        fee_total.push(fee)
-        outstanding_htlcs.push(htlcs)
-      }
-      blocks = blocks.slice(1)
-      openings = openings.slice(1)
-      closings = closings.slice(1)
-      total = total.slice(1)
-      capacity = capacity.slice(1)
-      fee_total = fee_total.slice(1)
-      outstanding_htlcs = outstanding_htlcs.slice(1)
+    for (let i = 0; i < homechart.length; i++) {
+      let {blockgroup, opened, closed, cap_change, fee, htlcs} = homechart[i]
+      blocks.push(blockgroup)
+      openings.push(opened)
+      closings.push(closed)
+      total.push(
+        (total.length > 0 ? total[total.length - 1] : 0) + opened - closed
+      )
+      capacity.push(
+        (capacity.length > 0 ? capacity[capacity.length - 1] : 0) +
+          cap_change / 100000000
+      )
+      fee_total.push(fee)
+      outstanding_htlcs.push(htlcs)
+    }
+    blocks = blocks.slice(1)
+    openings = openings.slice(1)
+    closings = closings.slice(1)
+    total = total.slice(1)
+    capacity = capacity.slice(1)
+    fee_total = fee_total.slice(1)
+    outstanding_htlcs = outstanding_htlcs.slice(1)
 
-      for (let i = 0; i < closetypes.length; i++) {
-        let ct = closetypes[i]
-        closeblocks.push(ct.blockgroup)
-        unknown.push(ct.unknown)
-        unused.push(ct.unused)
-        mutual.push(ct.mutual)
-        force.push(ct.force)
-        force_unused.push(ct.force_unused)
-        penalty.push(ct.penalty)
-      }
+    for (let i = 0; i < closetypes.length; i++) {
+      let ct = closetypes[i]
+      closeblocks.push(ct.blockgroup)
+      closetypeaggregates.unknown.push(ct.unknown)
+      closetypeaggregates.unused.push(ct.unused)
+      closetypeaggregates.mutual.push(ct.mutual)
+      closetypeaggregates.force.push(ct.force)
+      closetypeaggregates.force_unused.push(ct.force_unused)
+      closetypeaggregates.penalty.push(ct.penalty)
+    }
 
-      H.chart('open-close', {
-        title: {text: ''},
-        xAxis: {
-          categories: window.blocks.map(b => b.toString().slice(0, -2) + '__')
+    H.chart('open-close', {
+      title: {text: ''},
+      xAxis: {
+        categories: blocks.map(b => b.toString().slice(0, -2) + '__')
+      },
+      yAxis: [
+        {visible: false},
+        {visible: false},
+        {visible: false},
+        {visible: false},
+        {visible: false}
+      ],
+      series: [
+        {
+          name: 'capacity (btc)',
+          type: 'area',
+          data: capacity,
+          step: 'left',
+          yAxis: 2,
+          color: 'var(--gold)'
         },
-        yAxis: [
-          {visible: false},
-          {visible: false},
-          {visible: false},
-          {visible: false},
-          {visible: false}
-        ],
-        series: [
-          {
-            name: 'capacity (btc)',
-            type: 'area',
-            data: window.capacity,
-            step: 'left',
-            yAxis: 2,
-            color: 'var(--gold)'
-          },
-          {
-            name: 'total',
-            type: 'area',
-            data: window.total,
-            step: 'left',
-            yAxis: 1,
-            color: 'var(--blue)'
-          },
-          {
-            name: 'openings',
-            type: 'column',
-            data: window.openings,
-            yAxis: 0,
-            color: 'var(--green)',
-            borderWidth: 1
-          },
-          {
-            name: 'closings',
-            type: 'column',
-            data: window.closings,
-            yAxis: 0,
-            color: 'var(--red)',
-            borderWidth: 1
-          },
-          {
-            name: 'onchain fee total',
-            type: 'spline',
-            data: window.fee_total,
-            yAxis: 3,
-            color: 'rgba(0, 0, 0, 0.5)',
-            lineWidth: 1,
-            visible: Math.random() < 0.08
-          },
-          {
-            name: 'outstanding_htlcs',
-            type: 'spline',
-            data: window.outstanding_htlcs,
-            yAxis: 4,
-            dashStyle: 'Dash',
-            color: '#c1a478',
-            lineWidth: 1,
-            visible: Math.random() < 0.2
-          }
-        ],
-        plotOptions
-      })
-
-      H.chart('close-types', {
-        title: {text: ''},
-        chart: {type: 'areaspline'},
-        xAxis: {
-          categories: window.closeblocks.map(
-            b => b.toString().slice(0, -2) + '__'
-          )
+        {
+          name: 'total',
+          type: 'area',
+          data: total,
+          step: 'left',
+          yAxis: 1,
+          color: 'var(--blue)'
         },
-        yAxis: [
-          {visible: false},
-          {visible: false},
-          {visible: false},
-          {visible: false},
-          {visible: false}
-        ],
-        series: [
-          ['unknown', '#e4dfda'],
-          ['unused', 'var(--green)'],
-          ['mutual', 'var(--blue)'],
-          ['force', '#f58f29'],
-          ['force_unused', '#7d4600'],
-          ['penalty', 'var(--red)']
-        ].map(([name, color]) => ({name, data: window[name], color})),
-        plotOptions: {...plotOptions, areaspline: {stacking: 'percent'}}
-      })
+        {
+          name: 'openings',
+          type: 'column',
+          data: openings,
+          yAxis: 0,
+          color: 'var(--green)',
+          borderWidth: 1
+        },
+        {
+          name: 'closings',
+          type: 'column',
+          data: closings,
+          yAxis: 0,
+          color: 'var(--red)',
+          borderWidth: 1
+        },
+        {
+          name: 'onchain fee total',
+          type: 'spline',
+          data: fee_total,
+          yAxis: 3,
+          color: 'rgba(0, 0, 0, 0.5)',
+          lineWidth: 1,
+          visible: Math.random() < 0.08
+        },
+        {
+          name: 'outstanding_htlcs',
+          type: 'spline',
+          data: outstanding_htlcs,
+          yAxis: 4,
+          dashStyle: 'Dash',
+          color: '#c1a478',
+          lineWidth: 1,
+          visible: Math.random() < 0.2
+        }
+      ],
+      plotOptions
+    })
+
+    H.chart('close-types', {
+      title: {text: ''},
+      chart: {type: 'areaspline'},
+      xAxis: {
+        categories: closeblocks.map(b => b.toString().slice(0, -2) + '__')
+      },
+      yAxis: [
+        {visible: false},
+        {visible: false},
+        {visible: false},
+        {visible: false},
+        {visible: false}
+      ],
+      series: [
+        ['unknown', '#e4dfda'],
+        ['unused', 'var(--green)'],
+        ['mutual', 'var(--blue)'],
+        ['force', '#f58f29'],
+        ['force_unused', '#7d4600'],
+        ['penalty', 'var(--red)']
+      ].map(([name, color]) => ({
+        name,
+        data: closetypeaggregates[name],
+        color
+      })),
+      plotOptions: {...plotOptions, areaspline: {stacking: 'percent'}}
     })
   })
 </script>
@@ -216,36 +217,36 @@
       {#each allnodes as node}
       <tr>
         <td>
-          <a href="/node/{node.id}"
-            >{#if node.name}{node.name}{:else}{abbr(node.id)}{% endif}</a
+          <a href="/node/{node.pubkey}"
+            >{#if node.alias}{node.alias}{:else}{abbr(node.pubkey)}{/if}</a
           >
         </td>
         <td>
-          {node.nopen}
+          {node.openchannels}
           <i
             class="bar"
             style="width:{100 * node.nopen / stats.max_node_openchannels}%; background: var(--gold)"
           />
         </td>
         <td>
-          {node.nopen + node.nclosed}
+          {node.openchannels + node.closedchannels}
           <i
             class="bar"
-            style="width:{100 * (node.nopen + node.nclosed) / stats.max_node_allchannels}%; background: var(--orange)"
+            style="width:{100 * (node.openchannels+ node.closedchannels) / stats.max_node_allchannels}%; background: var(--orange)"
           />
         </td>
         <td>
-          {(100 * node.nclosed / node.nopen).toFixed(0)}
+          {(100 * node.closedchannels / node.openchannels).toFixed(0)}
           <i
             class="bar"
-            style="width:{100 * (100 * node.nclosed / node.nopen) / stats.max_node_close_rate}%; background: var(--orange)"
+            style="width:{100 * (100 * node.closedchannels/ node.openchannels) / stats.max_node_close_rate}%; background: var(--orange)"
           />
         </td>
         <td>
-          {(node.avgduration).toFixed()}
+          {(node.avg_duration).toFixed()}
           <i
             class="bar"
-            style="width:{100 * node.avgduration / stats.max_node_average_duration}%; background: var(--gold)"
+            style="width:{100 * node.avg_duration / stats.max_node_average_duration}%; background: var(--gold)"
           />
         </td>
       </tr>
@@ -282,12 +283,12 @@
         <td>{chan.open_block}</td>
         <td>
           <a href="/node/{chan.id0}"
-            >{#if chan.name0}{chan.name0}{:else}{abbr(chan.id0)}{% endif}</a
+            >{#if chan.name0}{chan.name0}{:else}{abbr(chan.id0)}{/if}</a
           >
         </td>
         <td>
           <a href="/node/{chan.id1}"
-            >{#if chan.name1}{chan.name1}{:else}{abbr(chan.id1)}{% endif}</a
+            >{#if chan.name1}{chan.name1}{:else}{abbr(chan.id1)}{/if}</a
           >
         </td>
         <td>
