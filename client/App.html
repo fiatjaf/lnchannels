@@ -20,6 +20,7 @@
   })
 
   function route(location, action) {
+    searchQuery = ''
     routedComponent = null
     setTimeout(() => {
       if (location.pathname === '/') {
@@ -73,12 +74,13 @@
   })
 
   var searchQuery = ''
-  var searchResults = []
-  const search = debounce(async function() {
+  var searchResults = Promise.reject(null)
+
+  const search = debounce(function() {
     if (searchQuery === '') return
-    searchResults = await (
-      await fetch(`/api/rpc/search?query=${searchQuery}`)
-    ).json()
+    searchResults = fetch(`/api/rpc/search?query=${searchQuery}`).then(r =>
+      r.json()
+    )
   }, 1200)
 </script>
 
@@ -115,9 +117,12 @@
 </nav>
 
 {#if searchQuery.length}
-<div id="searchresults">
+<div>
+  {#await searchResults}
+  <p>searching</p>
+  {:then results}
   <ul>
-    {#each searchResults as result}
+    {#each results as result}
     <li class:closed="{result.closed}" class="search-item">
       <a href="{result.url}">
         ({result.kind}) {result.label}
@@ -127,6 +132,7 @@
     <p>No results found for query "{searchQuery}".</p>
     {/each}
   </ul>
+  {:catch _} {/await}
 </div>
 {/if}
 
