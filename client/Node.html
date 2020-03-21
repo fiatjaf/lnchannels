@@ -1,21 +1,33 @@
 <!-- @format -->
 
 <script>
-  import {onMount} from 'svelte'
-  import {abbr} from './helpers'
+  import {onMount, getContext} from 'svelte'
+  import {abbr, date} from './helpers'
 
-  var node
+  import NodeHistory from './charts/NodeHistory.html'
+  import Bubbles from './charts/Bubbles.html'
+
+  var loading = true
+
+  var node = {}
   var aliases = []
-  var channels
-  var stats
+  var channels = []
+
+  var maxfee = 0
+  var maxcap = 0
 
   const id = getContext('history')
     .location.pathname.split('/')
     .slice(-1)[0]
 
-  onMount(async () => {
-    stats = await getContext('stats')
+  // toggle incoming-outgoing fee policy display
+  var direction = 'outgoing'
+  function toggleDirection(e) {
+    e.preventDefault()
+    direction = direction === 'outgoing' ? 'incoming' : 'outgoing'
+  }
 
+  onMount(async () => {
     let res = await Promise.all([
       fetch(`/api/nodes?pubkey=eq.${id}`).then(r => r.json()),
       fetch(
@@ -23,266 +35,124 @@
       ).then(r => r.json()),
       fetch(`/api/rpc/node_channels?pubkey=${id}`).then(r => r.json())
     ])
+
+    loading = false
+
     node = res[0][0]
     aliases = res[1]
     channels = res[2]
 
     node.name = node.alias ? `"${node.alias}"` : abbr(node.pubkey)
 
-    let table = document.getElementById('node-channels-table')
-
-    // toggle incoming-outgoing fee policy display
-    let toggles = table.querySelectorAll('a.toggle-outgoing-incoming')
-    for (let i = 0; i < toggles.length; i++) {
-      let toggle = toggles[i]
-      toggle.addEventListener('click', e => {
-        e.preventDefault()
-        table.classList.toggle('show-outgoing')
-        table.classList.toggle('show-incoming')
-      })
-    }
-
-    // gather info
-    var blockmap = {}
-    var opens = {}
-    var closes = {}
-    var open_sats = {}
-    var close_sats = {}
-    var maxfee = 0
-    var maxcap = 0
-    var openchannelsbubbles = []
-
-    let rows = table.querySelectorAll('tbody tr')
-    for (let i = rows.length - 1; i >= 0; i--) {
-      let row = rows[i]
-      let satoshis = parseFloat(row.children[2].innerHTML)
-      let opened_at = parseInt(row.children[4].innerHTML)
-      let closed_at = parseInt(row.children[5].innerHTML.split(' ')[0])
-      let peer_name = row.children[0].textContent
-      let peer_size = parseInt(row.children[0].dataset.size)
-      let peer_url = row.children[0].children[0].href
-
-      // gather data for the chart
-      opens[opened_at] = opens[opened_at] || 0
-      open_sats[opened_at] = open_sats[opened_at] || 0
-      opens[opened_at]++
-      open_sats[opened_at] += satoshis
-      blockmap[opened_at] = true
-
-      if (!isNaN(closed_at)) {
-        // if it's closed gather close data
-        closes[closed_at] = closes[closed_at] || 0
-        close_sats[closed_at] = close_sats[closed_at] || 0
-        closes[closed_at]++
-        close_sats[closed_at] += satoshis
-        blockmap[closed_at] = true
-      } else {
-        // if it's open add to bubble chart
-        openchannelsbubbles.push({
-          x: opened_at,
-          y: satoshis,
-          z: peer_size,
-          name: peer_name,
-          url: peer_url
-        })
-      }
-
+    for (let i = channels.length - 1; i >= 0; i--) {
       // data for the microcharts later
-      let fee = parseInt(row.children[3].innerHTML.split(' ').slice(-1)[0])
+      let chan = channels[i]
+      let fee = chan.open_fee + (chan.close_fee || 0)
       maxfee = fee > maxfee ? fee : maxfee
-      let cap = parseInt(row.children[2].innerHTML)
-      maxcap = cap > maxcap ? cap : maxcap
+      maxcap = chan.satoshis > maxcap ? chan.satoshis : maxcap
     }
-
-    // insert last block if not exists (so the chart is not stuck in a past position)
-    if (!(stats.last_block in blockmap)) {
-      blockmap[stats.last_block] = true
-    }
-
-    // make main chart
-    let blocks = Object.keys(blockmap).sort()
-    var openings = []
-    var closings = []
-    var total = []
-    var capacity = []
-
-    for (let i = 0; i < blocks.length; i++) {
-      let b = blocks[i]
-      let x = parseInt(b)
-      openings.push([x, opens[b] || 0])
-      closings.push([x, closes[b] || 0])
-      total.push([
-        x,
-        (total.length > 0 ? total[i - 1][1] : 0) +
-          (opens[b] || 0) -
-          (closes[b] || 0)
-      ])
-      capacity.push([
-        x,
-        (capacity.length > 0 ? capacity[i - 1][1] : 0) +
-          (open_sats[b] || 0) -
-          (close_sats[b] || 0)
-      ])
-    }
-
-    H.chart('node-channels-history', {
-      title: {text: ''},
-      yAxis: [{visible: false}, {visible: false}, {visible: false}],
-      series: [
-        {
-          name: 'capacity (sat)',
-          type: 'area',
-          data: capacity,
-          step: 'left',
-          yAxis: 2,
-          color: 'var(--gold)'
-        },
-        {
-          name: 'total',
-          type: 'area',
-          data: total,
-          step: 'left',
-          yAxis: 1,
-          color: 'var(--blue)'
-        },
-        {
-          name: 'openings',
-          type: 'column',
-          data: openings,
-          yAxis: 0,
-          color: 'var(--green)',
-          borderWidth: 1
-        },
-        {
-          name: 'closings',
-          type: 'column',
-          data: closings,
-          yAxis: 0,
-          color: 'var(--red)',
-          borderWidth: 1
-        }
-      ],
-      plotOptions
-    })
-
-    // create microcharts
-    for (let i = 0; i < rows.length; i++) {
-      let row = rows[i]
-
-      // fee
-      let fee = parseInt(row.children[3].innerHTML.split(' ').slice(-1)[0])
-      let feescaled = 100 * (fee / maxfee)
-      let fw = feescaled.toFixed(2)
-      row.children[3].innerHTML += `<i class="bar" style="width:${fw}%; background: var(--gold)" />`
-
-      // capacity
-      let capscaled = (100 * parseInt(row.children[2].innerHTML)) / maxcap
-      let cw = capscaled.toFixed(2)
-      row.children[2].innerHTML += `<i class="bar" style="width:${cw}%; background: var(--gold)" />`
-    }
-
-    // channel bubbles
-    H.chart('node-channels-bubble', {
-      title: {text: ''},
-      yAxis: [{title: {text: 'channel size (sat)', enabled: null}, floor: 0}],
-      series: [
-        {
-          type: 'bubble',
-          data: openchannelsbubbles,
-          marker: {fillColor: 'var(--gold)'},
-          showInLegend: false,
-          minSize: '1%',
-          maxSize: '30%',
-          sizeBy: 'width',
-          dataLabels: {
-            enabled: true,
-            format: '{point.name}',
-            style: {
-              color: 'black',
-              textOutline: 'none',
-              fontWeight: 'normal'
-            }
-          },
-          tooltip: {
-            headerFormat: '',
-            followPointer: true,
-            followTouchMove: true,
-            pointFormat: '{point.name}: {point.y}',
-            valueSuffix: ' sat'
-          },
-          events: {
-            click: e => {
-              location.href = e.point.url
-            }
-          }
-        }
-      ]
-    })
 
     // channels list (insert close events in the list)
-    var closeevents = []
-    let trchannels = document
-      .getElementById('node-channels-table')
-      .querySelectorAll('tbody tr')
-    for (let i = 0; i < trchannels.length; i++) {
-      if (trchannels[i].classList.contains('closed')) {
-        let scid = trchannels[i].id.slice(3)
-        let closeblock = trchannels[i].children[5].innerText.trim()
-        if (closeevents.length && closeevents[0].block === scid) {
-          closeevents[0].channels.push(scid)
-        } else {
-          closeevents.push({block: closeblock, channels: [scid]})
-        }
-      }
-    }
+    // var closeevents = []
+    // let trchannels = document
+    //   .getElementById('channels-table')
+    //   .querySelectorAll('tbody tr')
+    // for (let i = 0; i < trchannels.length; i++) {
+    //   if (trchannels[i].classList.contains('closed')) {
+    //     let scid = trchannels[i].id.slice(3)
+    //     let closeblock = trchannels[i].children[5].innerText.trim()
+    //     if (closeevents.length && closeevents[0].block === scid) {
+    //       closeevents[0].channels.push(scid)
+    //     } else {
+    //       closeevents.push({block: closeblock, channels: [scid]})
+    //     }
+    //   }
+    // }
 
-    closeevents.sort((a, b) => parseInt(a.block) - parseInt(b.block))
+    // closeevents.sort((a, b) => parseInt(a.block) - parseInt(b.block))
 
-    // go from bottom to top inserting the rows correspondent to close events
-    for (let i = trchannels.length - 2; i >= 0; i--) {
-      let trbefore = trchannels[i + 1]
-      let block = parseInt(trchannels[i].children[4].innerText.trim())
-      while (parseInt(closeevents[0].block) < block) {
-        trbefore = insertCloseEventRow(trbefore, closeevents.shift())
-      }
-      if (closeevents.length === 0) break
-    }
+    // // go from bottom to top inserting the rows correspondent to close events
+    // for (let i = trchannels.length - 2; i >= 0; i--) {
+    //   let trbefore = trchannels[i + 1]
+    //   let block = parseInt(trchannels[i].children[4].innerText.trim())
+    //   while (parseInt(closeevents[0].block) < block) {
+    //     trbefore = insertCloseEventRow(trbefore, closeevents.shift())
+    //   }
+    //   if (closeevents.length === 0) break
+    // }
 
-    // do the same as above, but for the last/upmost row
-    let trbefore = trchannels[0]
-    let block = 9999999
-    while (parseInt(closeevents[0].block) < block) {
-      trbefore = insertCloseEventRow(trbefore, closeevents.shift())
-    }
+    // // do the same as above, but for the last/upmost row
+    // let trbefore = trchannels[0]
+    // let block = 9999999
+    // while (parseInt(closeevents[0].block) < block) {
+    //   trbefore = insertCloseEventRow(trbefore, closeevents.shift())
+    // }
 
-    function insertCloseEventRow(before, ev) {
-      let closedblock = ev.block
-      let closedscids = ev.channels
-      var trclose = document.createElement('tr')
-      trclose.className = 'close-event'
-      trclose.innerHTML = `<td colspan="4">
-            closed: ${closedscids
-              .map(c => `<a href="#ch-${c}">${c}</a>`)
-              .join(', ')
-              .replace(/\, ([^,]+)$/, (comma, rest) => ' and ' + rest)}
-          </td>
-          <td>${closedblock}</td>
-          <td colspan="2"></td>
-          `
-      before.parentNode.insertBefore(trclose, before)
-      return trclose
-    }
+    // function insertCloseEventRow(before, ev) {
+    //   let closedblock = ev.block
+    //   let closedscids = ev.channels
+    //   var trclose = document.createElement('tr')
+    //   trclose.className = 'close-event'
+    //   trclose.innerHTML = `<td colspan="4">
+    //         closed: ${closedscids
+    //           .map(c => `<a href="#ch-${c}">${c}</a>`)
+    //           .join(', ')
+    //           .replace(/\, ([^,]+)$/, (comma, rest) => ' and ' + rest)}
+    //       </td>
+    //       <td>${closedblock}</td>
+    //       <td colspan="2"></td>
+    //       `
+    //   before.parentNode.insertBefore(trclose, before)
+    //   return trclose
+    // }
   })
 </script>
+
+<style>
+  .toggle {
+    cursor: pointer;
+    text-decoration: none;
+    border-style: dotted;
+    border-width: 0 0 3px 0;
+  }
+  .toggle {
+    border-style: dashed;
+  }
+  .col-incoming {
+    display: none;
+  }
+  .col-outgoing {
+    display: none;
+  }
+
+  #channels-bubble .highcharts-point {
+    fill: var(--gold);
+  }
+  #channels-bubble .highcharts-point,
+  #channels-bubble .highcharts-data-label {
+    cursor: pointer;
+  }
+
+  tr.close-event {
+    background-color: #e8dcdc;
+    opacity: 0.7;
+  }
+  #channels-table tr.close-event td {
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: 20px;
+  }
+</style>
 
 <svelte:head>
   <title>node {node.name}</title>
   <meta
     name="description"
-    content="{abbr(node.pubkey)}: {node.nopen} channels, total capacity of {node.cap} satoshis"
+    content="{abbr(node.pubkey)}: {node.openchannels} channels, total capacity of {node.capacity} satoshis"
   />
 </svelte:head>
 
+{#if loading} loading {:else}
 <h1>
   node
   <pre class="id">{node.pubkey}</pre>
@@ -302,7 +172,7 @@
       <tbody>
         {#each aliases as alias}
         <tr>
-          <td>{alias.first_seen}</td>
+          <td>{date(alias.first_seen)}</td>
           <td>{alias.alias}</td>
         </tr>
         {/each}
@@ -310,32 +180,33 @@
     </table>
   </div>
   {/if}
+
   <div>
     <table>
       <tbody>
         <tr>
           <th>open channels</th>
-          <td>{node.nopen}</td>
+          <td>{node.openchannels}</td>
         </tr>
         <tr>
           <th>closed channels</th>
-          <td>{node.nclosed}</td>
+          <td>{node.closedchannels}</td>
         </tr>
         <tr>
           <th>avg channel duration</th>
-          <td>{node.avgduration}</td>
+          <td>{node.avg_duration}</td>
         </tr>
         <tr>
           <th>avg opening fee</th>
-          <td>{node.avgopenfee}</td>
+          <td>{node.avg_open_fee}</td>
         </tr>
         <tr>
           <th>avg closing fee</th>
-          <td>{node.avgclosefee}</td>
+          <td>{node.avg_close_fee}</td>
         </tr>
         <tr>
           <th>capacity</th>
-          <td>{node.cap}</td>
+          <td>{node.capacity}</td>
         </tr>
       </tbody>
     </table>
@@ -344,17 +215,17 @@
 
 <div>
   <h4>channel variation</h4>
-  <div id="node-channels-history" />
+  <NodeHistory channels="{channels}" />
 </div>
 
 <div>
   <h4>current channels</h4>
-  <div id="node-channels-bubble" />
+  <Bubbles channels="{channels}" />
 </div>
 
 <div>
   <h4>all channels</h4>
-  <table id="node-channels-table" class="show-outgoing">
+  <table id="channels-table">
     <thead>
       <tr>
         <th>with</th>
@@ -363,11 +234,12 @@
         <th>chain fee</th>
         <th>open</th>
         <th>close</th>
-        <th class="col-outgoing">
-          ↗ <a class="toggle-outgoing-incoming">outgoing</a> fee policy
-        </th>
-        <th class="col-incoming">
-          ↙ <a class="toggle-outgoing-incoming">incoming</a> fee policy
+        <th>
+          {#if direction == "outgoing"} ↗ {:else} ↙ {/if}
+          <span class="toggle" on:click="{toggleDirection}">
+            {direction}
+          </span>
+          fee policy
         </th>
       </tr>
     </thead>
@@ -388,12 +260,23 @@
             {channel.short_channel_id}
           </a>
         </td>
-        <td>{channel.satoshis}</td>
+        <td>
+          {channel.satoshis}
+          <i
+            class="bar"
+            style="width:{(100 * (channel.satoshis / maxcap)).toFixed(2)}%; background: var(--gold)"
+          />
+        </td>
         <td
-          title="{(100 * (channel.open_fee + channel.close_fee) / channel.satoshis).toFixed(2)}% of the channel value"
+          title="{(100 * (channel.open_fee + channel.close_fee) / channel.satoshis).toFixed(2)}% of total value"
         >
           {channel.open_fee} {#if channel.close_block > 0} + {channel.close_fee}
           = {channel.open_fee + channel.close_fee} {/if}
+
+          <i
+            class="bar"
+            style="width:{(100 * (channel.open_fee + channel.close_fee) / maxfee).toFixed(2)}%; background: var(--gold)"
+          />
         </td>
         <td>{channel.open_block}</td>
         <td>{#if channel.close_block > 0} {channel.close_block} {/if}</td>
@@ -405,15 +288,15 @@
           channel.close_htlc_count != 1}s{/if} {/if}
         </td>
         {:else}
-        <td class="col-outgoing">
+        <td class:hidden="{direction !== 'outgoing'}">
           {channel.outgoing_fee_per_millionth / 10000}% (min
-          {channel.outgoing_base_fee_millisatoshi / 1000}.toFixed(3) sat); delay
-          of {channel.outgoing_delay}
+          {(channel.outgoing_base_fee_millisatoshi / 1000).toFixed(3)} sat);
+          delay of {channel.outgoing_delay}
         </td>
-        <td class="col-incoming">
+        <td class:hidden="{direction !== 'incoming'}">
           {channel.incoming_fee_per_millionth / 10000}% (min
-          {channel.incoming_base_fee_millisatoshi / 1000}.toFixed(3) sat); delay
-          of {channel.incoming_delay}
+          {(channel.incoming_base_fee_millisatoshi / 1000).toFixed(3)} sat);
+          delay of {channel.incoming_delay}
         </td>
         {/if}
       </tr>
@@ -421,3 +304,4 @@
     </tbody>
   </table>
 </div>
+{/if}

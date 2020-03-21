@@ -1,0 +1,72 @@
+<!-- @format -->
+
+<script>
+  import {onMount} from 'svelte'
+
+  export let channels
+
+  var el
+
+  onMount(() => {
+    var bubbledata = []
+
+    for (let i = channels.length - 1; i >= 0; i--) {
+      let chan = channels[i]
+
+      if (!chan.close_block) {
+        // if it's open add to bubble chart
+        bubbledata.push({
+          x: chan.open_block,
+          y: chan.satoshis,
+          z: chan.peer_size,
+          name: chan.peer_name,
+          scid: chan.short_channel_id
+        })
+      }
+    }
+
+    // channel bubbles
+    H.chart(el, {
+      title: {text: ''},
+      yAxis: [{title: {text: 'channel size (sat)', enabled: null}, floor: 0}],
+      series: [
+        {
+          type: 'bubble',
+          data: bubbledata,
+          marker: {fillColor: 'var(--gold)'},
+          showInLegend: false,
+          minSize: '1%',
+          maxSize: '30%',
+          sizeBy: 'width',
+          dataLabels: {
+            enabled: true,
+            format: '{point.name}',
+            style: {
+              color: 'black',
+              textOutline: 'none',
+              fontWeight: 'normal'
+            }
+          },
+          tooltip: {
+            headerFormat: '',
+            followPointer: true,
+            followTouchMove: true,
+            pointFormat: '{point.name}: {point.y}',
+            valueSuffix: ' sat'
+          },
+          events: {
+            click: e => {
+              document.getElementById(`ch-${e.point.scid}`).scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+                inline: 'nearest'
+              })
+            }
+          }
+        }
+      ]
+    })
+  })
+</script>
+
+<div bind:this="{el}" />

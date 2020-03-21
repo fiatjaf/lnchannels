@@ -1,0 +1,45 @@
+<!-- @format -->
+
+<script>
+  import {onMount} from 'svelte'
+  import {plotOptions} from '../helpers'
+
+  export let homechart
+
+  var el
+
+  onMount(() => {
+    var blocks = []
+    var openings = []
+    var closings = []
+    var total = []
+    var capacity = []
+    var fee_total = []
+    var outstanding_htlcs = []
+
+    for (let i = 0; i < homechart.length; i++) {
+      let {blockgroup, opened, closed, cap_change, fee, htlcs} = homechart[i]
+      blocks.push(blockgroup)
+      openings.push(opened)
+      closings.push(closed)
+      total.push(
+        (total.length > 0 ? total[total.length - 1] : 0) + opened - closed
+      )
+      capacity.push(
+        (capacity.length > 0 ? capacity[capacity.length - 1] : 0) +
+          cap_change / 100000000
+      )
+      fee_total.push(fee)
+      outstanding_htlcs.push(htlcs)
+    }
+    blocks = blocks.slice(1)
+    openings = openings.slice(1)
+    closings = closings.slice(1)
+    total = total.slice(1)
+    capacity = capacity.slice(1)
+    fee_total = fee_total.slice(1)
+    outstanding_htlcs = outstanding_htlcs.slice(1)
+  })
+</script>
+
+<div bind:this="{el}" />
