@@ -314,38 +314,6 @@ RETURNS TABLE (
   ORDER BY open_block DESC
 $$ LANGUAGE SQL STABLE;
 
-CREATE OR REPLACE FUNCTION search(query text)
-RETURNS TABLE (
-  url text,
-  kind text,
-  label text,
-  closed bool
-) AS $$
-  SELECT DISTINCT ON (url) url, kind, label, closed FROM
-  (
-    SELECT
-      'channel' AS kind,
-      short_channel_id || ' (' || satoshis || ' sat)' AS label,
-      '/channel/' || short_channel_id AS url,
-      close_block IS NOT NULL AS closed
-    FROM channels WHERE short_channel_id >= $1 and short_channel_id < $1 || '{'
-  UNION ALL
-    SELECT
-      'node' AS kind,
-      alias || ' (' || openchannels || ' channels)' AS label,
-      '/node/' || pubkey AS url,
-      false AS closed
-    FROM nodes WHERE pubkey >= $1 AND pubkey < $1 || '{'
-  UNION ALL
-    SELECT 'node' AS kind, alias || ' (' || openchannels || ' channels)' AS label,
-      '/node/' || nodes.pubkey AS url,
-      false AS closed
-    FROM nodes
-    INNER JOIN (SELECT pubkey FROM nodealiases WHERE alias LIKE '%' || $1 || '%') AS namesearch
-      ON nodes.pubkey = namesearch.pubkey
-  )x
-$$ LANGUAGE SQL STABLE;
-
 CREATE OR REPLACE FUNCTION channel_data (short_channel_id text)
 RETURNS TABLE (
   open_block int, open_fee int, open_transaction text, open_time timestamp,
@@ -364,4 +332,38 @@ FROM channels
 LEFT OUTER JOIN nodes AS n0 ON n0.pubkey = node0
 LEFT OUTER JOIN nodes AS n1 ON n1.pubkey = node1
 WHERE short_channel_id = $1
+$$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION search(query text)
+RETURNS TABLE (
+  url text,
+  kind text,
+  label text,
+  closed bool
+) AS $$
+  SELECT DISTINCT ON (url) url, kind, label, closed FROM
+  (
+    SELECT
+      'channel' AS kind,
+      short_channel_id || ' (' || satoshis || ' sat)' AS label,
+      '/channel/' || short_channel_id AS url,
+      close_block IS NOT NULL AS closed
+    FROM channels WHERE short_channel_id >= $1 and short_channel_id < $1 || 'Z'
+  UNION ALL
+    SELECT
+      'node' AS kind,
+      alias || ' (' || openchannels || ' channels)' AS label,
+      '/node/' || pubkey AS url,
+      false AS closed
+    FROM nodes WHERE pubkey >= $1 AND pubkey < $1 || 'Z'
+  UNION ALL
+    SELECT
+      'node' AS kind,
+      alias || ' (' || openchannels || ' channels)' AS label,
+      '/node/' || nodes.pubkey AS url,
+      false AS closed
+    FROM nodes
+    INNER JOIN (SELECT pubkey FROM nodealiases WHERE alias LIKE '%' || $1 || '%') AS namesearch
+      ON nodes.pubkey = namesearch.pubkey
+  )x
 $$ LANGUAGE SQL STABLE;
