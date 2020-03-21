@@ -15,7 +15,7 @@ bitcoin = BitcoinRPC(BITCOIN_RPC_ADDRESS, BITCOIN_RPC_USER, BITCOIN_RPC_PASSWORD
 def listchannels(db):
     info = bitcoin.getblockchaininfo()
     tip = info["blocks"]
-    since = tip - int(144 * 30 * random.random())
+    since = tip - int(144 * 60 * random.random())
 
     r = requests.post(
         SPARK_URL, headers={"X-Access": SPARK_TOKEN}, json={"method": "listchannels"}

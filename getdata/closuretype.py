@@ -48,68 +48,51 @@ def closuretype(scid, close_txid):
     bal_b = 0
     nhtlcs = 0
 
-    close = bitcoin.getrawtransaction(close_txid, True)
+    try:
+        r = requests.get(f"https://blockstream.info/api/tx/{close_txid}/outspends")
+    except requests.exceptions.ConnectionError:
+        raise ClosureTypeError()
+    if not r.ok:
+        raise ClosureTypeError()
+
+    spends = r.json()
     outs = []
 
     # label each output of the closing transaction
     # (we'll have to look at the transactions that spend them)
-    for out in close["vout"]:
-        if out["scriptPubKey"]["type"] == "witness_v0_keyhash":
-            outs.append("pubkey")
+    for spend in spends:
+        if spend["spent"] == False:
+            raise ClosureTypeError("not spent yet")
+
+        f = bitcoin.getrawtransaction(spend["txid"], True)
+        witness = f["vin"][spend["vin"]]["txinwitness"]
+        amount = sum([int(vout["value"] * 10000000) for vout in f["vout"]])
+
+        if len(witness) == 2:
+            outs.append(("pubkey", amount))
         else:
-            address = out["scriptPubKey"]["addresses"][0]
-            try:
-                r = requests.get(f"https://blockstream.info/api/address/{address}/txs")
-            except requests.exceptions.ConnectionError:
-                raise ClosureTypeError()
-            if not r.ok:
-                raise ClosureTypeError()
-
-            # find the followup transaction and the witness data we need
-            # to determine the type of the previous
-            witness = None
-            for followuptx in r.json():
-                f = bitcoin.getrawtransaction(followuptx["txid"], True)
-                # find the output we're interested in
-                # if the followup transaction uses many
-                for inp in f["vin"]:
-                    if inp["txid"] == close_txid and inp["vout"] == out["n"]:
-                        witness = inp["txinwitness"]
-                        break
-                if witness:
-                    break
-
-            if not witness:
-                # didn't find a witness.
-                # transaction wasn't spent (and also isn't a pubkey). very odd.
-                outs.append("unknown")
-                print("unknown output", close, "from", scid)
-                continue
-
-            script = bitcoin.decodescript(witness[-1])
+            script = bitcoin.decodescript(witness[-1])["asm"]
             if "OP_HASH160" in script:
-                outs.append("htlc")
+                outs.append(("htlc", amount))
             elif "OP_CHECKSEQUENCEVERIFY" in script:
                 if witness[-2] == "01":
-                    outs.append("penalty")
+                    outs.append(("penalty", amount))
                 else:
-                    outs.append("balance")
+                    outs.append(("balance", amount))
             else:
-                outs.append("unknown")
-                print("unknown output", close, "from", scid)
+                outs.append(("unknown", amount))
 
     # now that we have labels for all outputs we use a simple (maybe wrong?)
     # heuristic to determine what happened.
-    if len(outs) == 1 and outs[0] == "pubkey":
+    if len(outs) == 1 and outs[0][0] == "pubkey":
         typ = "unused"
-        bal_a = int(close["vout"][0]["value"] * 100000000)
-    elif len(outs) == 2 and outs[0] == "pubkey" and outs[1] == "pubkey":
+        bal_a = int(outs[0][1])
+    elif len(outs) == 2 and outs[0][0] == "pubkey" and outs[1][0] == "pubkey":
         typ = "mutual"
-        bal_a = int(close["vout"][0]["value"] * 100000000)
-        bal_a = int(close["vout"][1]["value"] * 100000000)
+        bal_a = outs[0][1]
+        bal_a = outs[1][1]
     else:
-        i = 0
-        for out in outs:
+        for out, amt in outs:
             if out == "htlc":
                 nhtlcs += 1
                 continue
@@ -122,19 +105,19 @@ def closuretype(scid, close_txid):
 
             if out == "penalty" or out == "balance" or out == "pubkey":
                 if bal_a == 0:
-                    bal_a = int(close["vout"][i]["value"] * 100000000)
+                    bal_a = amt
                 elif bal_b == 0:
-                    bal_b = int(close["vout"][i]["value"] * 100000000)
+                    bal_b = amt
                 else:
                     # this should never happen
                     typ = "unknown"
-
-            i += 1
 
     # no matter how balances were arranged above
     # if we detected a penalty we can assume everything is on one side
     if typ == "penalty":
         bal_a += bal_b
         bal_b = 0
+
+    print("\t", outs)
 
     return typ, bal_a, bal_b, nhtlcs

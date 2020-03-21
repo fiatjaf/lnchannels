@@ -31,19 +31,19 @@ SELECT last_seen FROM (
             last_seen = row[0]
             db.execute(
                 """
-INSERT INTO nodealiases (pubkey, alias, first_seen, last_seen)
-VALUES (%s, %s, now(), now())
-            """,
-                (node["nodeid"], node.get("alias", "")),
-            )
-        else:
-            db.execute(
-                """
 UPDATE nodealiases
 SET last_seen = now()
 WHERE last_seen = %s AND pubkey = %s
             """,
                 (last_seen, node["nodeid"]),
+            )
+        else:
+            db.execute(
+                """
+INSERT INTO nodealiases (pubkey, alias, first_seen, last_seen)
+VALUES (%s, %s, now(), now())
+            """,
+                (node["nodeid"], node.get("alias", "")),
             )
 
         print("inserted", node["nodeid"])
