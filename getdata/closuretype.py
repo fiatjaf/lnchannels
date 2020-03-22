@@ -16,9 +16,12 @@ def closuretypes(db):
     for row in db.fetchall():
         scid, close_txid = row
 
+        print(scid, end=" ")
+
         try:
             typ, bal_a, bal_b, nhtlcs = closuretype(scid, close_txid)
-        except ClosureTypeError:
+        except ClosureTypeError as exc:
+            print("couldn't determine:", exc)
             continue
 
         db.execute(
@@ -34,7 +37,7 @@ WHERE short_channel_id = %s
             (typ, bal_a, bal_b, nhtlcs, scid),
         )
 
-        print(scid, "closed as", typ, "with", nhtlcs, "htlcs")
+        print("\t", typ, "with", nhtlcs, "htlcs")
 
 
 class ClosureTypeError(Exception):
@@ -69,7 +72,8 @@ def closuretype(scid, close_txid):
         amount = sum([int(vout["value"] * 10000000) for vout in f["vout"]])
 
         if len(witness) == 2:
-            outs.append(("pubkey", amount))
+            # paying to a pubkey
+            outs.append(("any", amount))
         else:
             script = bitcoin.decodescript(witness[-1])["asm"]
             if "OP_HASH160" in script:
@@ -80,14 +84,17 @@ def closuretype(scid, close_txid):
                 else:
                     outs.append(("balance", amount))
             else:
-                outs.append(("unknown", amount))
+                # paying to a custom address, means the same as a pubkey
+                # (it's anything the peer wants to spend to either in a
+                #  mutual close or when the other party is force-closing)
+                outs.append(("any", amount))
 
     # now that we have labels for all outputs we use a simple (maybe wrong?)
     # heuristic to determine what happened.
-    if len(outs) == 1 and outs[0][0] == "pubkey":
+    if len(outs) == 1 and outs[0][0] == "any":
         typ = "unused"
         bal_a = int(outs[0][1])
-    elif len(outs) == 2 and outs[0][0] == "pubkey" and outs[1][0] == "pubkey":
+    elif len(outs) == 2 and outs[0][0] == "any" and outs[1][0] == "any":
         typ = "mutual"
         bal_a = outs[0][1]
         bal_a = outs[1][1]
@@ -95,6 +102,7 @@ def closuretype(scid, close_txid):
         for out, amt in outs:
             if out == "htlc":
                 nhtlcs += 1
+                typ = "force"
                 continue
 
             if out == "penalty":
@@ -103,14 +111,13 @@ def closuretype(scid, close_txid):
             if out == "balance":
                 typ = "force"
 
-            if out == "penalty" or out == "balance" or out == "pubkey":
+            if out == "penalty" or out == "balance" or out == "any":
                 if bal_a == 0:
                     bal_a = amt
                 elif bal_b == 0:
                     bal_b = amt
                 else:
-                    # this should never happen
-                    typ = "unknown"
+                    raise ClosureTypeError("more than 2 balances")
 
     # no matter how balances were arranged above
     # if we detected a penalty we can assume everything is on one side
@@ -118,6 +125,6 @@ def closuretype(scid, close_txid):
         bal_a += bal_b
         bal_b = 0
 
-    print("\t", outs)
+    print(outs, end=" ")
 
     return typ, bal_a, bal_b, nhtlcs
