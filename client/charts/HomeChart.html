@@ -1,11 +1,13 @@
 <!-- @format -->
 
 <script>
-  import {onMount, getContext} from 'svelte'
+  import {onMount, onDestroy, getContext} from 'svelte'
   import {plotOptions} from '../helpers'
 
-  var el
   const first_block = getContext('first_block')
+
+  var el
+  var chart
 
   onMount(async () => {
     let data = await (
@@ -43,7 +45,7 @@
     fee_total = fee_total.slice(1)
     outstanding_htlcs = outstanding_htlcs.slice(1)
 
-    H.chart(el, {
+    chart = H.chart(el, {
       title: {text: ''},
       xAxis: {
         categories: blocks.map(b => b.toString().slice(0, -2) + '__')
@@ -111,6 +113,13 @@
       plotOptions
     })
   })
+
+  onDestroy(() => {
+    chart.destroy()
+  })
 </script>
 
-<div bind:this="{el}" />
+<div>
+  <h4>history of the open network</h4>
+  <div bind:this="{el}" />
+</div>

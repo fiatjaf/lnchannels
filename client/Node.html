@@ -109,15 +109,6 @@
 </script>
 
 <style>
-  .toggle {
-    cursor: pointer;
-    text-decoration: none;
-    border-style: dotted;
-    border-width: 0 0 3px 0;
-  }
-  .toggle {
-    border-style: dashed;
-  }
   .col-incoming {
     display: none;
   }
@@ -145,7 +136,7 @@
 </style>
 
 <svelte:head>
-  <title>node {node.name}</title>
+  <title>node {node.alias}</title>
   <meta
     name="description"
     content="{abbr(node.pubkey)}: {node.openchannels} channels, total capacity of {node.capacity} satoshis"
@@ -213,16 +204,8 @@
   </div>
 </div>
 
-<div>
-  <h4>channel variation</h4>
-  <NodeHistory channels="{channels}" />
-</div>
-
-<div>
-  <h4>current channels</h4>
-  <Bubbles channels="{channels}" />
-</div>
-
+<NodeHistory channels="{channels}" />
+<Bubbles channels="{channels}" />
 <div>
   <h4>all channels</h4>
   <table id="channels-table">

@@ -1,11 +1,12 @@
 <!-- @format -->
 
 <script>
-  import {onMount} from 'svelte'
+  import {onMount, onDestroy} from 'svelte'
 
   export let channels
 
   var el
+  var chart
 
   onMount(() => {
     var bubbledata = []
@@ -26,7 +27,7 @@
     }
 
     // channel bubbles
-    H.chart(el, {
+    chart = H.chart(el, {
       title: {text: ''},
       yAxis: [{title: {text: 'channel size (sat)', enabled: null}, floor: 0}],
       series: [
@@ -67,6 +68,13 @@
       ]
     })
   })
+
+  onDestroy(() => {
+    chart.destroy()
+  })
 </script>
 
-<div bind:this="{el}" />
+<div>
+  <h4>current channels</h4>
+  <div bind:this="{el}" />
+</div>

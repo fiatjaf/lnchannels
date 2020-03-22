@@ -8,7 +8,7 @@
 }
 
 main { margin: 0 1rem; }
-h1, h2, h3, h4, h5, h6 { white-space: pre-wrap; word-wrap: break-word; }
+h1, h2, h3, h4, h5, h6 { word-wrap: break-word; }
 td { font-family: monospace; font-size: 0.9em; position: relative; }
 table tr:nth-child(2n) { background-color: #fdfdfd; }
 table table { margin: 0; }
@@ -28,12 +28,19 @@ pre.id { white-space: pre-wrap; word-break: break-all; overflow: auto; }
 }
 *:hover > .bar { z-index: -1; }
 .highcharts-credits { display: none; }
-
 .flex-col {
   display: flex;
   justify-content: space-between;
 }
-
 .hidden {
   display: none;
 }
+.toggle {
+  cursor: pointer;
+  text-decoration: none;
+  border-style: dotted;
+  border-width: 0 0 3px 0;
+  color: var(--blue);
+}
+.toggle { border-style: dashed; }
+.toggle:hover { border-style: dotted; }

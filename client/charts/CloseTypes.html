@@ -1,24 +1,26 @@
 <!-- @format -->
 
 <script>
-  import {onMount, getContext} from 'svelte'
+  import {onMount, onDestroy, getContext} from 'svelte'
   import {plotOptions} from '../helpers'
 
-  var el
   const first_block = getContext('first_block')
 
-  onMount(async () => {
-    let closetypes = await (
-      await fetch(`/api/closetypes?blockgroup=gt.${first_block}`, {
-        headers: {
-          'Range-Unit': 'items',
-          Range: '1-'
-        }
-      })
-    ).json()
+  var el
+  var chart
 
-    var closeblocks = []
-    var closetypeaggregates = {
+  var blocks = []
+  export var chartType = 'counts' // or 'sizes'
+  var chartAggregates = {
+    counts: {
+      unknown: [],
+      unused: [],
+      mutual: [],
+      force: [],
+      force_unused: [],
+      penalty: []
+    },
+    sizes: {
       unknown: [],
       unused: [],
       mutual: [],
@@ -26,23 +28,22 @@
       force_unused: [],
       penalty: []
     }
+  }
 
-    for (let i = 0; i < closetypes.length; i++) {
-      let ct = closetypes[i]
-      closeblocks.push(ct.blockgroup)
-      closetypeaggregates.unknown.push(ct.unknown)
-      closetypeaggregates.unused.push(ct.unused)
-      closetypeaggregates.mutual.push(ct.mutual)
-      closetypeaggregates.force.push(ct.force)
-      closetypeaggregates.force_unused.push(ct.force_unused)
-      closetypeaggregates.penalty.push(ct.penalty)
-    }
+  function toggle(e) {
+    e.preventDefault()
+    chartType = chartType === 'counts' ? 'sizes' : 'counts'
+    buildChart()
+  }
 
-    H.chart(el, {
+  function buildChart() {
+    if (chart) chart.destroy()
+
+    chart = H.chart(el, {
       title: {text: ''},
       chart: {type: 'areaspline'},
       xAxis: {
-        categories: closeblocks.map(b => b.toString().slice(0, -2) + '__')
+        categories: blocks.map(b => b.toString().slice(0, -2) + '__')
       },
       yAxis: [
         {visible: false},
@@ -60,12 +61,52 @@
         ['penalty', 'var(--red)']
       ].map(([name, color]) => ({
         name,
-        data: closetypeaggregates[name],
+        data: chartAggregates[chartType][name],
         color
       })),
       plotOptions: {...plotOptions, areaspline: {stacking: 'percent'}}
     })
+  }
+
+  onMount(async () => {
+    let data = await (
+      await fetch(`/api/closetypes?blockgroup=gt.${first_block}`, {
+        headers: {
+          'Range-Unit': 'items',
+          Range: '1-'
+        }
+      })
+    ).json()
+
+    for (let i = 0; i < data.length; i++) {
+      let ct = data[i]
+      blocks.push(ct.blockgroup)
+      chartAggregates.counts.unknown.push(ct.unknown.c)
+      chartAggregates.counts.unused.push(ct.unused.c)
+      chartAggregates.counts.mutual.push(ct.mutual.c)
+      chartAggregates.counts.force.push(ct.force.c)
+      chartAggregates.counts.force_unused.push(ct.force_unused.c)
+      chartAggregates.counts.penalty.push(ct.penalty.c)
+      chartAggregates.sizes.unknown.push(ct.unknown.s)
+      chartAggregates.sizes.unused.push(ct.unused.s)
+      chartAggregates.sizes.mutual.push(ct.mutual.s)
+      chartAggregates.sizes.force.push(ct.force.s)
+      chartAggregates.sizes.force_unused.push(ct.force_unused.s)
+      chartAggregates.sizes.penalty.push(ct.penalty.s)
+    }
+
+    buildChart()
+  })
+
+  onDestroy(() => {
+    chart.destroy()
   })
 </script>
 
-<div bind:this="{el}" />
+<div>
+  <h4>
+    types of channel closes (by
+    <span class="toggle" on:click="{toggle}">{chartType}</span>)
+  </h4>
+  <div bind:this="{el}" />
+</div>

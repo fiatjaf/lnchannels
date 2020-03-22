@@ -1,12 +1,13 @@
 <!-- @format -->
 
 <script>
-  import {onMount, getContext} from 'svelte'
+  import {onMount, onDestroy, getContext} from 'svelte'
   import {plotOptions} from '../helpers'
 
   export let channels
 
   var el
+  var chart
 
   onMount(async () => {
     let stats = await getContext('stats')
@@ -69,7 +70,7 @@
       blockmap[stats.last_block] = true
     }
 
-    H.chart(el, {
+    chart = H.chart(el, {
       title: {text: ''},
       yAxis: [{visible: false}, {visible: false}, {visible: false}],
       series: [
@@ -109,6 +110,13 @@
       plotOptions
     })
   })
+
+  onDestroy(() => {
+    chart.destroy()
+  })
 </script>
 
-<div bind:this="{el}" />
+<div>
+  <h4>channel variation</h4>
+  <div bind:this="{el}" />
+</div>

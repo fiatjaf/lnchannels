@@ -131,26 +131,26 @@ CREATE MATERIALIZED VIEW globalstats AS
 GRANT SELECT ON globalstats TO web_anon;
 
 CREATE MATERIALIZED VIEW closetypes AS
-  WITH dchannels AS (
-    SELECT
-      close_block,
-      CASE WHEN close_type = 'force' AND close_balance_b = 0 THEN 'force unused' ELSE close_type END AS close_type
-    FROM channels
-  ), base AS (
+  WITH base AS (
     SELECT (close_block/1000)*1000 AS blockgroup,
-      close_type,
-      count(close_type) AS c
-    FROM dchannels
-    GROUP BY close_block/1000, close_type
+      CASE WHEN close_type = 'force' AND close_balance_b = 0 AND close_htlc_count = 0
+        THEN 'force_unused'
+        ELSE close_type
+      END AS t,
+      count(close_type) AS c,
+      sum(satoshis) AS s
+    FROM channels
+    WHERE close_type IS NOT NULL
+    GROUP BY blockgroup, t
   )
   SELECT
     blockgroup,
-    coalesce((SELECT c FROM base WHERE base.blockgroup = b.blockgroup AND close_type = 'unknown'), 0) AS unknown,
-    coalesce((SELECT c FROM base WHERE base.blockgroup = b.blockgroup AND close_type = 'unused'), 0) AS unused,
-    coalesce((SELECT c FROM base WHERE base.blockgroup = b.blockgroup AND close_type = 'mutual'), 0) AS mutual,
-    coalesce((SELECT c FROM base WHERE base.blockgroup = b.blockgroup AND close_type = 'force'), 0) AS force,
-    coalesce((SELECT c FROM base WHERE base.blockgroup = b.blockgroup AND close_type = 'force unused'), 0) AS force_unused,
-    coalesce((SELECT c FROM base WHERE base.blockgroup = b.blockgroup AND close_type = 'penalty'), 0) AS penalty
+    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'unknown')x), '{"c": 0, "s": 0}'::jsonb) AS unknown,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'unused')x), '{"c": 0, "s": 0}'::jsonb) AS unused,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'mutual')x), '{"c": 0, "s": 0}'::jsonb) AS mutual,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'force')x), '{"c": 0, "s": 0}'::jsonb) AS force,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'force_unused')x), '{"c": 0, "s": 0}'::jsonb) AS force_unused,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'penalty')x), '{"c": 0, "s": 0}'::jsonb) AS penalty
   FROM base AS b
   WHERE blockgroup IS NOT NULL
   GROUP BY blockgroup
