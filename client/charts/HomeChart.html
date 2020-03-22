@@ -1,14 +1,17 @@
 <!-- @format -->
 
 <script>
-  import {onMount} from 'svelte'
+  import {onMount, getContext} from 'svelte'
   import {plotOptions} from '../helpers'
 
-  export let homechart
-
   var el
+  const first_block = getContext('first_block')
 
-  onMount(() => {
+  onMount(async () => {
+    let data = await (
+      await fetch(`/api/rpc/home_chart?since_block=${first_block}`)
+    ).json()
+
     var blocks = []
     var openings = []
     var closings = []
@@ -17,8 +20,8 @@
     var fee_total = []
     var outstanding_htlcs = []
 
-    for (let i = 0; i < homechart.length; i++) {
-      let {blockgroup, opened, closed, cap_change, fee, htlcs} = homechart[i]
+    for (let i = 0; i < data.length; i++) {
+      let {blockgroup, opened, closed, cap_change, fee, htlcs} = data[i]
       blocks.push(blockgroup)
       openings.push(opened)
       closings.push(closed)

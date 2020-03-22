@@ -7,34 +7,25 @@
   import HomeChart from './charts/HomeChart.html'
   import CloseTypes from './charts/CloseTypes.html'
 
-  var loading = true
-
   const first_block = getContext('first_block')
 
-  var homechart
-  var closetypes
-
   var longestliving = []
-  var allnodes = []
+  var topnodes = []
   var stats = {}
 
   onMount(async () => {
     stats = await getContext('stats')
-
-    let res = await Promise.all([
-      fetch(`/api/rpc/home_chart?since_block=${first_block}`).then(r =>
-        r.json()
-      ),
-      fetch(`/api/closetypes?blockgroup=gt.${first_block}`, {
-        headers: {
-          'Range-Unit': 'items',
-          Range: '1-'
-        }
-      }).then(r => r.json()),
-      fetch(
+    longestliving = await (
+      await fetch(
         `/api/rpc/longest_living_channels?last_block=${stats.last_block}`
-      ).then(r => r.json()),
-      fetch(
+      )
+    ).json()
+  })
+
+  onMount(async () => {
+    stats = await getContext('stats')
+    topnodes = await (
+      await fetch(
         `/api/nodes?openchannels=gt.0&order=openchannels.desc&select=pubkey,alias,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity`,
         {
           headers: {
@@ -42,15 +33,8 @@
             Range: '0-49'
           }
         }
-      ).then(r => r.json())
-    ])
-
-    loading = false
-
-    homechart = res[0]
-    closetypes = res[1]
-    longestliving = res[2]
-    allnodes = res[3]
+      )
+    ).json()
   })
 </script>
 
@@ -62,14 +46,13 @@
   />
 </svelte:head>
 
-{#if loading} loading {:else}
 <div>
   <h4>history of the open network</h4>
-  <HomeChart homechart="{homechart}" />
+  <HomeChart />
 </div>
 <div>
   <h4>types of channel closes</h4>
-  <CloseTypes closetypes="{closetypes}" />
+  <CloseTypes />
 </div>
 <div>
   <h4>some of the biggest nodes</h4>
@@ -84,7 +67,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each allnodes as node}
+      {#each topnodes as node}
       <tr>
         <td>
           <a href="/node/{node.pubkey}"
@@ -124,6 +107,7 @@
     </tbody>
   </table>
 </div>
+
 <div>
   <h4>longest living channels</h4>
   <table id="longest-living">
@@ -173,4 +157,3 @@
     </tbody>
   </table>
 </div>
-{/if}

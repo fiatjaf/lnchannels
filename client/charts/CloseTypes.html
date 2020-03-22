@@ -1,14 +1,22 @@
 <!-- @format -->
 
 <script>
-  import {onMount} from 'svelte'
+  import {onMount, getContext} from 'svelte'
   import {plotOptions} from '../helpers'
 
-  export let closetypes
-
   var el
+  const first_block = getContext('first_block')
 
-  onMount(() => {
+  onMount(async () => {
+    let closetypes = await (
+      await fetch(`/api/closetypes?blockgroup=gt.${first_block}`, {
+        headers: {
+          'Range-Unit': 'items',
+          Range: '1-'
+        }
+      })
+    ).json()
+
     var closeblocks = []
     var closetypeaggregates = {
       unknown: [],
