@@ -341,6 +341,9 @@ RETURNS TABLE (
   label text,
   closed bool
 ) AS $$
+  WITH q AS (
+    SELECT lower($1) AS query
+  )
   SELECT DISTINCT ON (url) url, kind, label, closed FROM
   (
     SELECT
@@ -348,14 +351,16 @@ RETURNS TABLE (
       short_channel_id || ' (' || satoshis || ' sat)' AS label,
       '/channel/' || short_channel_id AS url,
       close_block IS NOT NULL AS closed
-    FROM channels WHERE short_channel_id >= $1 and short_channel_id < $1 || 'Z'
+    FROM channels
+    WHERE short_channel_id >= (SELECT query FROM q) and short_channel_id < (SELECT query FROM q) || 'Z'
   UNION ALL
     SELECT
       'node' AS kind,
       alias || ' (' || openchannels || ' channels)' AS label,
       '/node/' || pubkey AS url,
       false AS closed
-    FROM nodes WHERE pubkey >= $1 AND pubkey < $1 || 'Z'
+    FROM nodes
+    WHERE pubkey >= (SELECT query FROM q) AND pubkey < (SELECT query FROM q) || 'Z'
   UNION ALL
     SELECT
       'node' AS kind,
@@ -363,7 +368,11 @@ RETURNS TABLE (
       '/node/' || nodes.pubkey AS url,
       false AS closed
     FROM nodes
-    INNER JOIN (SELECT pubkey FROM nodealiases WHERE alias LIKE '%' || $1 || '%') AS namesearch
-      ON nodes.pubkey = namesearch.pubkey
+    INNER JOIN
+        ( SELECT pubkey
+          FROM nodealiases
+          WHERE lower(alias) LIKE '%' || (SELECT query FROM q) || '%'
+        ) AS n
+        ON nodes.pubkey = n.pubkey
   )x
 $$ LANGUAGE SQL STABLE;
