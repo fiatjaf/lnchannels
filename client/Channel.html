@@ -102,9 +102,10 @@
   </tr>
 </table>
 
-{#if downwardpolicies || upwardpolicies}
+{#if upwardpolicies.length || downwardpolicies.length}
 <h4>policy details</h4>
 <div style="display: flex">
+  {#if upwardpolicies.length}
   <table>
     <caption>
       from
@@ -132,6 +133,7 @@
       {/each}
     </tbody>
   </table>
+  {/if} {#if downwardpolicies.length}
   <table>
     <caption>
       from
@@ -159,6 +161,7 @@
       {/each}
     </tbody>
   </table>
+  {/if}
 </div>
 {/if}
 
@@ -203,14 +206,12 @@
         {channel.close_transaction}
       </a>
       {#if channel.close_type}
+      <div>close type: <strong>{channel.close_type}</strong></div>
+      {#if channel.close_htlc_count > 0}
       <div>
-        close type: <strong>{channel.close_type}</strong>
-        {#if channel.close_htlc_count > 0}
-        <span>
-          outstanding HTLCs: {channel.close_htlc_count}
-        </span>
-        {/if}
+        outstanding HTLCs: {channel.close_htlc_count}
       </div>
+      {/if}
       <div>
         <em>{channel.close_balance_a} sat</em> ↹
         <em>{channel.close_balance_b} sat</em>
