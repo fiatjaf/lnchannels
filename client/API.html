@@ -1,1 +1,311 @@
-Docs coming soon. For now <p>ask on <a href="https://t.me/lntxbot_dev">Telegram</a>.</p>
+<!-- @format -->
+
+<script>
+  const endpoint = 'https://' + location.host + '/api'
+</script>
+
+<style>
+  article {
+    width: 90%;
+    max-width: 900px;
+    margin: auto;
+  }
+  #methods div {
+    margin-bottom: 20px;
+  }
+  #methods ul {
+    list-style: none;
+    padding: none;
+  }
+  h3 {
+    font-family: monospace;
+    font-weight: bold;
+  }
+  ul .code {
+    margin-top: 7px;
+  }
+  .code {
+    font-family: monospace;
+    background-color: #eae6d3;
+    padding: 7px 6px 1px;
+    border-radius: 3px;
+  }
+  code.code {
+    display: inline-block;
+  }
+</style>
+
+<article>
+  <h1>API Docs</h1>
+  <p>
+    This API is powered by
+    <a href="https//postgrest.org/en/v6.0/api.html#custom-queries">PostgREST</a
+    >, so you can go there if you want to craft a very complex query.
+  </p>
+  <p>Some important topics:</p>
+  <ul>
+    <li>The base endpoint is <code class="code">{endpoint}</code>.</li>
+    <li>All API methods return a JSON array.</li>
+    <li>
+      There's a limit of 1000 rows per API call, please let me know if you need
+      more.
+    </li>
+    <li>
+      Every endpoint supports
+      <a href="https//postgrest.org/en/v6.0/api.html#v-filter"
+        >returning only specified fields</a
+      >, filtering by attributes using
+      <a href="https//postgrest.org/en/v6.0/api.html#operators"
+        >eq, gt, lt etc.</a
+      >
+      operators,
+      <a href="https//postgrest.org/en/v6.0/api.html#limits-and-pagination"
+        >pagination</a
+      >
+      and other
+      <a href="https//postgrest.org/en/v6.0/api.html#renaming-columns"
+        >fancy things</a
+      >.
+    </li>
+    <li>
+      <a href="https://postgrest.org/en/v6.0/api.html#custom-queries"
+        >RPC endpoints</a
+      >
+      allow you to pass the argument either as a query string in a GET request
+      or as a JSON body in a POST request.
+    </li>
+  </ul>
+  <div id="methods">
+    <h2>Methods</h2>
+    <div>
+      <h3>/channels</h3>
+      <p>
+        Returns an array of plain channels. That includes close data and closure
+        type if the channel was closed already, otherwise these values will be
+        null.
+      </p>
+      <pre class="code">
+{`[
+  {
+    "short_channel_id": "572699x1147x0",
+    "open_block": 572699,
+    "open_time": "2019-04-22T03:26:08",
+    "open_transaction": "dda6fb8cdee9c3df0d2104179a8834f4dd2cbb5dbb40a0593f00e99cac1d11ad",
+    "open_fee": 7029,
+    "address": "bc1q2043em2a2f0zczykp4j4msxadkl0p3sqr6c0z6hntatuggl2jx8sq2g5f2",
+    "close_block": 600797,
+    "close_time": "2019-10-24T04:05:01",
+    "close_transaction": "71d5acfa5e948f78dbaf496aede18ea33ab86197ebef0332e8aa33acad92b2b5",
+    "close_fee": 4218,
+    "close_type": "force",
+    "close_htlc_count": 0,
+    "close_balance_a": 155553,
+    "close_balance_b": 0,
+    "node0": "02a4aa22327ca4f511ebd22b72d6b00ac3b529a7d4c2de7d8ac939a48371559e8e",
+    "node1": "02d8527e8aa8c2d11d562c900bb2ef47b920c371fc30b805167bb7b2f1da6d7356",
+    "satoshis": 700000,
+    "last_seen": "2019-10-23T04:13:16"
+  },
+  ...
+]`}
+  </pre
+      >
+      <b>Examples:</b>
+      <ul>
+        <li>
+          <code class="code"
+            >curl '{endpoint}/channels?short_channel_id=eq.572699x1147x0'</code
+          >
+          returns only the channel 572699x1147x0.
+        </li>
+        <li>
+          <code class="code"
+            >curl
+            '{endpoint}/channels?open_block=gte.622000&amp;open_block=lt623000'</code
+          >
+          returns only channels created between blocks 622000 and 622999.
+        </li>
+        <li>
+          <code class="code"
+            >curl '{endpoint}/channels?close_type=eq.penalty'</code
+          >
+          returns only channels closed with penalty transactions.
+        </li>
+      </ul>
+    </div>
+    <div>
+      <h3>/nodes</h3>
+      <p>
+        Returns an array of nodes. That includes channel counts, capacity and
+        other aggregated values.
+      </p>
+      <pre class="code">
+{`[
+  {
+    "pubkey": "024bd94f0425590434538fd21d4e58982f7e9cfd8f339205a73deb9c0e0341f5bd",
+    "alias": "CL.rompert.com🔵 ",
+    "oldestchannel": 511949,
+    "openchannels": 32,
+    "closedchannels": 9,
+    "capacity": 27790149,
+    "avg_duration": 68863.51219512195,
+    "avg_open_fee": 3391.8048780487807,
+    "avg_close_fee": 18149.777777777777
+  },
+  ...
+]`}
+  </pre
+      >
+      <b>Examples:</b>
+      <ul>
+        <li>
+          <code class="code"
+            >curl
+            '{endpoint}/nodes?pubkey=eq.024bd94f0425590434538fd21d4e58982f7e9cfd8f339205a73deb9c0e0341f5bd'</code
+          >
+          returns only the node
+          024bd94f0425590434538fd21d4e58982f7e9cfd8f339205a73deb9c0e0341f5bd.
+        </li>
+        <li>
+          <code class="code"
+            >curl '{endpoint}/nodes?order=capacity.desc' -H 'Range: 0-4'</code
+          >
+          returns the top 5 nodes by capacity.
+        </li>
+      </ul>
+    </div>
+    <div>
+      <h3>/nodealiases</h3>
+      <p>
+        Returns an array of aliases associated with a node. These mean the node
+        was spotted using that alias at some point, during some interval of
+        time, before it then changed its alias.
+      </p>
+      <pre class="code">
+{`[
+  {
+    "pubkey": "036b48ae27f45bc497eb92b6a43da534f4d771b896e74d787db171200324690fca",
+    "alias": "036b48ae27f45bc497eb",
+    "first_seen": "2019-07-31T19:13:38",
+    "last_seen": "2019-10-28T06:45:46"
+  },
+  ...
+]`}
+  </pre
+      >
+      <b>Examples:</b>
+      <ul>
+        <li>
+          <code class="code"
+            >curl
+            '{endpoint}/nodealiases?pubkey=eq.024bd94f0425590434538fd21d4e58982f7e9cfd8f339205a73deb9c0e0341f5bd&amp;order=first_seen.asc'</code
+          >
+          returns the history of aliases for the specified node, sorted.
+        </li>
+      </ul>
+    </div>
+    <div>
+      <h3>/policies</h3>
+      <p>
+        Returns an array of fee policies associated with a channel and a
+        direction. Direction "0" means it's from "node1" to "node0" and
+        direction "1" means from "node0" to "node1".
+      </p>
+      <pre class="code">
+{`[
+  {
+    "short_channel_id": "513675x2245x0",
+    "direction": 1,
+    "base_fee_millisatoshi": 1000,
+    "fee_per_millionth": 10,
+    "delay": 14,
+    "update_time": "2019-03-18T04:23:01"
+  },
+  ...
+]`}
+  </pre
+      >
+      <b>Examples:</b>
+      <ul>
+        <li>
+          <code class="code"
+            >curl
+            '{endpoint}/policies?short_channel_id=eq.513675x2245x0&amp;direction=eq.1&amp;order=update_time.asc'</code
+          >
+          returns the history of policy changes for the channel 513675x2245x0,
+          direction 1.
+        </li>
+      </ul>
+    </div>
+    <div>
+      <h3>/rpc/node_channels</h3>
+      <p>
+        Returns an array of channels with data from the point-of-view of the
+        node specified so they have more data about the channel peer and the
+        concept of "outgoing" and "incoming" fee.
+      </p>
+      <pre class="code">
+{`[
+  {
+    "short_channel_id": "619237x1477x1",
+    "peer_id": "025033fdfd6f4e0e909776f0e8250c997f75de9cb11466e3a36fb8e6c7a1abcbb9",
+    "peer_name": "remoteadmin.io",
+    "peer_size": 58716565,
+    "open_block": 619237,
+    "open_fee": 3228,
+    "close_block": null,
+    "close_fee": null,
+    "satoshis": 36772,
+    "outgoing_fee_per_millionth": 1,
+    "outgoing_base_fee_millisatoshi": 1000,
+    "outgoing_delay": 40,
+    "incoming_base_fee_millisatoshi": 1000,
+    "incoming_fee_per_millionth": 1,
+    "incoming_delay": 40,
+    "close_type": null,
+    "close_htlc_count": null
+  },
+  ...
+]`}
+  </pre
+      >
+    </div>
+    <div>
+      <h3>/rpc/search</h3>
+      <p>
+        Returns an array of search results that can specify either nodes or
+        channels. The fields searched are the node pubkey, all the history of
+        node aliases and the channel short_channel_id.
+      </p>
+      <pre class="code">
+{`[
+  {
+    "url": "/node/021779d56f6992431e959991a664d678a2f41054073adb48c5a351d791c9cb0781",
+    "kind": "node",
+    "label": "Banana!🍌 (24 channels)",
+    "closed": false
+  },
+  {
+    "url": "/node/022fc6fb0c0b1ccbcf8ff360b9e6aeb1c78f52ab7660e84996a5227d0a515ae6fb",
+    "kind": "node",
+    "label": "Electric-Banana (1 channels)",
+    "closed": false
+  },
+  {
+    "url": "/node/02baf43d3e283ebf113dc56a49ba2ad8d8ff41793594991273c6adb68820ac70eb",
+    "kind": "node",
+    "label": "TheMadBanana (1 channels)",
+    "closed": false
+  },
+  {
+    "url": "/node/035c77dc0a10fe60e1304ae5b57d8fef87751add5d016b896d854fb706be6fc96c",
+    "kind": "node",
+    "label": "Banana Phone! (1 channels)",
+    "closed": false
+  }
+]`}
+  </pre
+      >
+    </div>
+  </div>
+</article>
