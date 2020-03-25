@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS channels (
 CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id);
 CREATE INDEX IF NOT EXISTS index_node0 ON channels(node0);
 CREATE INDEX IF NOT EXISTS index_node1 ON channels(node1);
+CREATE INDEX IF NOT EXISTS index_opentx ON channels(open_transaction);
+CREATE INDEX IF NOT EXISTS index_closetx ON channels(close_transaction);
+CREATE INDEX IF NOT EXISTS index_address ON channels(address);
 GRANT SELECT ON channels TO web_anon;
 
 CREATE TABLE IF NOT EXISTS nodealiases (
@@ -352,7 +355,7 @@ RETURNS TABLE (
       '/channel/' || short_channel_id AS url,
       close_block IS NOT NULL AS closed
     FROM channels
-    WHERE short_channel_id >= (SELECT query FROM q) and short_channel_id < (SELECT query FROM q) || 'Z'
+    WHERE short_channel_id >= (SELECT query FROM q) and short_channel_id < (SELECT query FROM q) || 'Z' OR open_transaction = (SELECT query FROM q) OR close_transaction = (SELECT query FROM q) OR address = (SELECT query FROM q)
   UNION ALL
     SELECT
       'node' AS kind,

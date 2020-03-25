@@ -35,16 +35,24 @@
   }
 </style>
 
+<svelte:head>
+  <title>API Docs - ln.bigsun.xyz</title>
+  <meta
+    name="description"
+    content="PostgREST-based API with a ton of information about Lightning public channels and nodes."
+  />
+</svelte:head>
+
 <article>
   <h1>API Docs</h1>
-  <p>
-    This API is powered by
-    <a href="https//postgrest.org/en/v6.0/api.html#custom-queries">PostgREST</a
-    >, so you can go there if you want to craft a very complex query.
-  </p>
-  <p>Some important topics:</p>
   <ul>
     <li>The base endpoint is <code class="code">{endpoint}</code>.</li>
+    <li>
+      This API is powered by
+      <a href="https//postgrest.org/en/v6.0/api.html#custom-queries"
+        >PostgREST</a
+      >, so you can go there if you want to craft a very complex query.
+    </li>
     <li>All API methods return a JSON array.</li>
     <li>
       There's a limit of 1000 rows per API call, please let me know if you need
@@ -74,6 +82,7 @@
       allow you to pass the argument either as a query string in a GET request
       or as a JSON body in a POST request.
     </li>
+    <li>The data is updated once per day.</li>
   </ul>
   <div id="methods">
     <h2>Methods</h2>
@@ -274,8 +283,9 @@
       <h3>/rpc/search</h3>
       <p>
         Returns an array of search results that can specify either nodes or
-        channels. The fields searched are the node pubkey, all the history of
-        node aliases and the channel short_channel_id.
+        channels. The fields searched are the node pubkey, transactions (open
+        and close), channel address, all the history of node aliases and the
+        channel short_channel_id (prefix search works in this case).
       </p>
       <pre class="code">
 {`[
