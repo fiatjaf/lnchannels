@@ -3,8 +3,12 @@
 <script>
   import {onMount, getContext} from 'svelte'
   import {abbr, date} from './helpers'
+  import NotFound from './NotFound.html'
 
-  var channel = {}
+  var notfound = false
+  var channel = {
+    short_channel_id: 'loading'
+  }
   var upwardpolicies = []
   var downwardpolicies = []
   var stats = {}
@@ -16,20 +20,27 @@
   onMount(async () => {
     stats = await getContext('stats')
 
-    let res = await Promise.all([
-      fetch(`/api/rpc/channel_data?short_channel_id=${id}`).then(r => r.json()),
-      fetch(
-        `/api/policies?short_channel_id=eq.${id}&select=direction,base_fee_millisatoshi,fee_per_millionth,delay,update_time`
-      ).then(r => r.json())
-    ])
+    let res = await (
+      await fetch(`/api/rpc/channel_data?short_channel_id=${id}`)
+    ).json()
+    if (res.length === 0) {
+      notfound = true
+    } else {
+      channel = res[0]
+    }
+  })
 
-    let policies = res[1]
+  onMount(async () => {
+    let policies = await (
+      await fetch(
+        `/api/policies?short_channel_id=eq.${id}&select=direction,base_fee_millisatoshi,fee_per_millionth,delay,update_time`
+      )
+    ).json()
+
     for (let i = 0; i < policies.length; i++) {
       let policy = policies[i]
       ;[downwardpolicies, upwardpolicies][policy.direction].push(policy)
     }
-
-    channel = res[0][0]
   })
 </script>
 
@@ -41,186 +52,193 @@
   />
 </svelte:head>
 
-<h1>
-  channel
-  <pre class="id" class:closed="{channel.close_block}">
-    {channel.short_channel_id}
-  </pre>
-</h1>
-
-<h4>details</h4>
-<table>
-  <tr>
-    <th>short_channel_id</th>
-    <td>{channel.short_channel_id}</td>
-  </tr>
-  <tr>
-    <th>satoshis</th>
-    <td>{channel.satoshis}</td>
-  </tr>
-  <tr>
-    <th>nodes</th>
-    <td>
-      <table>
-        <tr>
-          <td>
-            {#if channel.node0name} {channel.node0name} {:else}
-            {abbr(channel.node0)} {/if}
-          </td>
-          <td>
-            {#if channel.node1name} {channel.node1name} {:else}
-            {abbr(channel.node1)} {/if}
-          </td>
-        </tr>
-        <tr>
-          <td>
-            <a href="/node/{channel.node0}">{abbr(channel.node0)}</a>
-          </td>
-          <td>
-            <a href="/node/{channel.node1}">{abbr(channel.node1)}</a>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-  <tr>
-    <th>duration</th>
-    <td>
-      {#if channel.close_block} {channel.close_block - channel.open_block}
-      blocks
-      <i
-        class="bar"
-        style="width:{100 * (channel.close_block - channel.open_block) / stats.max_channel_duration}%; background: var(--gold)"
-      />
-      {:else} {stats.last_block - channel.open_block} blocks and counting
-      <i
-        class="bar"
-        style="width:{100 * (stats.last_block - channel.open_block) / stats.max_channel_duration}%; background: var(--gold)"
-      />
-      {/if}
-    </td>
-  </tr>
-</table>
-
-{#if upwardpolicies.length || downwardpolicies.length}
-<h4>policy details</h4>
-<div style="display: flex">
-  {#if upwardpolicies.length}
-  <table>
-    <caption>
-      from
-      <code>
-        {#if channel.node0name} {channel.node0name} {:else}
-        {abbr(channel.node0)} {/if}
-      </code>
-    </caption>
-    <thead>
-      <tr>
-        <th>min fee</th>
-        <th>fee %</th>
-        <th>delay</th>
-        <th>update</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each upwardpolicies as policy}
-      <tr>
-        <td>{policy.base_fee_millisatoshi / 1000} sat</td>
-        <td>{policy.fee_per_millionth / 10000}</td>
-        <td>{policy.delay}</td>
-        <td>{date(policy.update_time)}</td>
-      </tr>
-      {/each}
-    </tbody>
-  </table>
-  {/if} {#if downwardpolicies.length}
-  <table>
-    <caption>
-      from
-      <code>
-        {#if channel.node1name} {channel.node1name} {:else}
-        {abbr(channel.node1)} {/if}
-      </code>
-    </caption>
-    <thead>
-      <tr>
-        <th>min fee</th>
-        <th>fee %</th>
-        <th>delay</th>
-        <th>update</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each downwardpolicies as policy}
-      <tr>
-        <td>{policy.base_fee_millisatoshi / 1000} sat</td>
-        <td>{policy.fee_per_millionth / 10000}</td>
-        <td>{policy.delay}</td>
-        <td>{date(policy.update_time)}</td>
-      </tr>
-      {/each}
-    </tbody>
-  </table>
-  {/if}
-</div>
+{#if notfound}
+<NotFound />
 {:else}
-<br />
-{/if}
+<div>
+  <h1>
+    channel
+    <pre class="id" class:closed="{channel.close_block}">
+    {channel.short_channel_id}
+  </pre
+    >
+  </h1>
 
-<h4>onchain transactions</h4>
-<table>
-  <tr>
-    <th></th>
-    <th>block</th>
-    <th>transaction</th>
-    <th>fee paid</th>
-  </tr>
-  <tr>
-    <th>open</th>
-    <td>
-      <a
-        href="https://blockstream.info/block/{channel.open_block}"
-        title="{channel.open_time}"
-      >
-        {channel.open_block}
-      </a>
-    </td>
-    <td>
-      <a href="https://blockstream.info/tx/{channel.open_transaction}">
-        {channel.open_transaction}
-      </a>
-    </td>
-    <td>{channel.open_fee} sat</td>
-  </tr>
-  {#if channel.close_block}
-  <tr>
-    <th>close</th>
-    <td>
-      <a
-        href="https://blockstream.info/block/{channel.close_block}"
-        title="{channel.close_time}"
-      >
-        {channel.close_block}
-      </a>
-    </td>
-    <td>
-      <a href="https://blockstream.info/tx/{channel.close_transaction}">
-        {channel.close_transaction}
-      </a>
-      {#if channel.close_type}
-      <div>close type: <strong>{channel.close_type}</strong></div>
-      {#if channel.close_htlc_count > 0}
-      <div>
-        outstanding HTLCs: {channel.close_htlc_count}
-      </div>
-      {/if}
-      <div>
-        <em>{channel.close_balance_a} sat</em> ↹
-        <em>{channel.close_balance_b} sat</em>
-      </div>
-      {/if}
-    </td>
-    <td>{channel.close_fee} sat</td>
-  </tr>
+  <h4>details</h4>
+  <table>
+    <tr>
+      <th>short_channel_id</th>
+      <td>{channel.short_channel_id}</td>
+    </tr>
+    <tr>
+      <th>satoshis</th>
+      <td>{channel.satoshis}</td>
+    </tr>
+    <tr>
+      <th>nodes</th>
+      <td>
+        <table>
+          <tr>
+            <td>
+              {#if channel.node0name} {channel.node0name} {:else}
+              {abbr(channel.node0)} {/if}
+            </td>
+            <td>
+              {#if channel.node1name} {channel.node1name} {:else}
+              {abbr(channel.node1)} {/if}
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <a href="/node/{channel.node0}">{abbr(channel.node0)}</a>
+            </td>
+            <td>
+              <a href="/node/{channel.node1}">{abbr(channel.node1)}</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <th>duration</th>
+      <td>
+        {#if channel.close_block} {channel.close_block - channel.open_block}
+        blocks
+        <i
+          class="bar"
+          style="width:{100 * (channel.close_block - channel.open_block) / stats.max_channel_duration}%; background: var(--gold)"
+        />
+        {:else} {stats.last_block - channel.open_block} blocks and counting
+        <i
+          class="bar"
+          style="width:{100 * (stats.last_block - channel.open_block) / stats.max_channel_duration}%; background: var(--gold)"
+        />
+        {/if}
+      </td>
+    </tr>
+  </table>
+
+  {#if upwardpolicies.length || downwardpolicies.length}
+  <h4>policy details</h4>
+  <div style="display: flex">
+    {#if upwardpolicies.length}
+    <table>
+      <caption>
+        from
+        <code>
+          {#if channel.node0name} {channel.node0name} {:else}
+          {abbr(channel.node0)} {/if}
+        </code>
+      </caption>
+      <thead>
+        <tr>
+          <th>min fee</th>
+          <th>fee %</th>
+          <th>delay</th>
+          <th>update</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each upwardpolicies as policy}
+        <tr>
+          <td>{policy.base_fee_millisatoshi / 1000} sat</td>
+          <td>{policy.fee_per_millionth / 10000}</td>
+          <td>{policy.delay}</td>
+          <td>{date(policy.update_time)}</td>
+        </tr>
+        {/each}
+      </tbody>
+    </table>
+    {/if} {#if downwardpolicies.length}
+    <table>
+      <caption>
+        from
+        <code>
+          {#if channel.node1name} {channel.node1name} {:else}
+          {abbr(channel.node1)} {/if}
+        </code>
+      </caption>
+      <thead>
+        <tr>
+          <th>min fee</th>
+          <th>fee %</th>
+          <th>delay</th>
+          <th>update</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each downwardpolicies as policy}
+        <tr>
+          <td>{policy.base_fee_millisatoshi / 1000} sat</td>
+          <td>{policy.fee_per_millionth / 10000}</td>
+          <td>{policy.delay}</td>
+          <td>{date(policy.update_time)}</td>
+        </tr>
+        {/each}
+      </tbody>
+    </table>
+    {/if}
+  </div>
+  {:else}
+  <br />
   {/if}
-</table>
+
+  <h4>onchain transactions</h4>
+  <table>
+    <tr>
+      <th></th>
+      <th>block</th>
+      <th>transaction</th>
+      <th>fee paid</th>
+    </tr>
+    <tr>
+      <th>open</th>
+      <td>
+        <a
+          href="https://blockstream.info/block/{channel.open_block}"
+          title="{channel.open_time}"
+        >
+          {channel.open_block}
+        </a>
+      </td>
+      <td>
+        <a href="https://blockstream.info/tx/{channel.open_transaction}">
+          {channel.open_transaction}
+        </a>
+      </td>
+      <td>{channel.open_fee} sat</td>
+    </tr>
+    {#if channel.close_block}
+    <tr>
+      <th>close</th>
+      <td>
+        <a
+          href="https://blockstream.info/block/{channel.close_block}"
+          title="{channel.close_time}"
+        >
+          {channel.close_block}
+        </a>
+      </td>
+      <td>
+        <a href="https://blockstream.info/tx/{channel.close_transaction}">
+          {channel.close_transaction}
+        </a>
+        {#if channel.close_type}
+        <div>close type: <strong>{channel.close_type}</strong></div>
+        {#if channel.close_htlc_count > 0}
+        <div>
+          outstanding HTLCs: {channel.close_htlc_count}
+        </div>
+        {/if}
+        <div>
+          <em>{channel.close_balance_a} sat</em> ↹
+          <em>{channel.close_balance_b} sat</em>
+        </div>
+        {/if}
+      </td>
+      <td>{channel.close_fee} sat</td>
+    </tr>
+    {/if}
+  </table>
+</div>
+{/if}
