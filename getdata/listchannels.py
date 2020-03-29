@@ -21,6 +21,8 @@ def listchannels(db):
         SPARK_URL, headers={"X-Access": SPARK_TOKEN}, json={"method": "listchannels"}
     )
     for ch in r.json()["channels"]:
+        if ch['public'] == False: continue
+
         block, *_ = ch["short_channel_id"].split("x")
         if int(block) < since:
             continue
