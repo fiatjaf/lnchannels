@@ -71,18 +71,18 @@ CREATE MATERIALIZED VIEW nodes AS
     )z GROUP BY pubkey
   )
   SELECT
-    open.pubkey AS pubkey,
+    agg.pubkey AS pubkey,
     coalesce(nodealias.alias, '') AS alias,
     agg.oldestchannel AS oldestchannel,
-    open.openchannels AS openchannels,
+    coalesce(open.openchannels, 0) AS openchannels,
     agg.closedchannels AS closedchannels,
-    open.capacity AS capacity,
+    coalesce(open.capacity, 0) AS capacity,
     agg.avg_duration AS avg_duration,
     agg.avg_open_fee AS avg_open_fee,
     agg.avg_close_fee AS avg_close_fee
-  FROM open
-  LEFT JOIN nodealias ON open.pubkey = nodealias.pubkey
-  INNER JOIN agg ON agg.pubkey = open.pubkey;
+  FROM agg
+  LEFT JOIN nodealias ON agg.pubkey = nodealias.pubkey
+  LEFT JOIN open ON agg.pubkey = open.pubkey;
 CREATE INDEX IF NOT EXISTS index_node ON nodes(pubkey);
 GRANT SELECT ON nodes TO web_anon;
 
@@ -110,7 +110,7 @@ CREATE MATERIALIZED VIEW globalstats AS
       max(openchannels) AS max_openchannels,
       max(closedchannels) AS max_closedchannels,
       max(openchannels + closedchannels) AS max_allchannels,
-      max(closedchannels / openchannels) AS max_close_rate,
+      max(closedchannels / CASE WHEN openchannels > 0 THEN openchannels ELSE 0.0001 END) AS max_close_rate,
       max(avg_duration) AS max_average_duration,
       max(avg_open_fee) AS max_average_open_fee,
       max(avg_close_fee) AS max_average_close_fee
