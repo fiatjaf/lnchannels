@@ -16,21 +16,21 @@ SELECT * FROM (
       SELECT
         short_channel_id,
         'a' AS match,
-        (onchain->'a' = 'null' OR onchain->'open'->'funder' = 'null') AS mistery,
+        (onchain->>'a' IS NULL OR onchain->'open'->>'funder' IS NULL) AS mistery,
         jsonb_array_elements_text(onchain->'txs'->'a') AS tx
       FROM channels
     UNION ALL
       SELECT
         short_channel_id,
         'b' AS match,
-        (onchain->'a' = 'null' OR onchain->'open'->'funder' = 'null') AS mistery,
+        (onchain->>'a' IS NULL OR onchain->'open'->>'funder' IS NULL) AS mistery,
         jsonb_array_elements_text(onchain->'txs'->'b') AS tx
       FROM channels
     UNION ALL
       SELECT
         short_channel_id,
         'funding' AS match,
-        (onchain->'a' = 'null' OR onchain->'open'->'funder' = 'null') AS mistery,
+        (onchain->>'a' IS NULL OR onchain->'open'->>'funder' IS NULL) AS mistery,
         jsonb_array_elements_text(onchain->'txs'->'funding') AS tx
       FROM channels
   )x

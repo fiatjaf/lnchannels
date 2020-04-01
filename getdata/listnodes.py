@@ -1,8 +1,6 @@
-import os
 import requests
 
-SPARK_URL = os.getenv("SPARK_URL")
-SPARK_TOKEN = os.getenv("SPARK_TOKEN")
+from .globals import SPARK_URL, SPARK_TOKEN
 
 
 def listnodes(db):

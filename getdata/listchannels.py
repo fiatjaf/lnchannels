@@ -8,7 +8,7 @@ from .globals import SPARK_URL, SPARK_TOKEN, bitcoin
 def listchannels(db):
     info = bitcoin.getblockchaininfo()
     tip = info["blocks"]
-    since = tip - int(144 * 60 * random.random())
+    since = tip - int(144 * 180 * random.random())
 
     r = requests.post(
         SPARK_URL, headers={"X-Access": SPARK_TOKEN}, json={"method": "listchannels"}
@@ -30,7 +30,7 @@ def listchannels(db):
             """
 INSERT INTO channels
     (short_channel_id, nodes, satoshis, last_seen)
-VALUES (%s, %s, %s, %s, now())
+VALUES (%s, %s, %s, now())
 ON CONFLICT (short_channel_id)
     DO UPDATE SET last_seen = excluded.last_seen
         """,
