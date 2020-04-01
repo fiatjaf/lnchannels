@@ -2,7 +2,9 @@
 
 <script>
   import {onMount, getContext} from 'svelte'
+
   import {abbr, plotOptions} from './helpers'
+  import * as d3 from './d3'
 
   import HomeChart from './charts/HomeChart.html'
   import CloseTypes from './charts/CloseTypes.html'
@@ -55,17 +57,9 @@
     ).json()
   })
 
-  function normalizeCrash(value, min, max) {
-    const crashMin = 50
-    const crashMax = 800
-
-    if (value > crashMax) return max
-    if (value < crashMin) return min
-    return (
-      (max - min) * ((value - crashMin) / (crashMax - crashMin)) +
-      min
-    ).toFixed(1)
-  }
+  const crashColor = d3
+    .scaleSequentialLog(d3.interpolateOranges)
+    .domain([50, 1600])
 </script>
 
 <svelte:head>
@@ -147,9 +141,7 @@
     </thead>
     <tbody>
       {#each crashed as chan}
-      <tr
-        style="background-color: hsla(12, 61%, {normalizeCrash(chan.crash, 90, 50)}%, 1)"
-      >
+      <tr style="background-color: {crashColor(chan.crash)}">
         <td>
           <a href="/channel/{chan.short_channel_id}">{chan.short_channel_id}</a>
         </td>
