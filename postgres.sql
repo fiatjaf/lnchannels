@@ -1,29 +1,47 @@
 CREATE TABLE IF NOT EXISTS channels (
   short_channel_id text PRIMARY KEY,
-  open_block integer,
-  open_time timestamp,
-  open_transaction text,
-  open_fee integer,
-  address text,
-  close_block integer,
-  close_time timestamp,
-  close_transaction text,
-  close_fee integer,
-  close_type text,
-  close_htlc_count integer,
-  close_balance_a integer,
-  close_balance_b integer,
-  node0 text NOT NULL,
-  node1 text NOT NULL,
-  satoshis integer,
-  last_seen timestamp NOT NULL
+  nodes jsonb NOT NULL,
+  onchain jsonb NOT NULL DEFAULT '{
+    "a": null,
+    "b": null,
+    "funder": null,
+    "closer": null,
+    "open": {
+      "block": null,
+      "txid": null,
+      "time": null,
+      "fee": null,
+      "address": null
+    },
+    "close": {
+      "block": null,
+      "txid": null,
+      "time": null,
+      "fee": null,
+      "balance": {
+        "a": 0,
+        "b": 0
+      },
+      "htlcs": {
+        "a": [],
+        "b": []
+      }
+    },
+    "txs": {
+      "a": [],
+      "b": [],
+      "funding": []
+    }
+  }',
+  satoshis integer NOT NULL,
+  last_seen timestamp NOT NULL,
+
+  CONSTRAINT checknodes
 );
 CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id);
-CREATE INDEX IF NOT EXISTS index_node0 ON channels(node0);
-CREATE INDEX IF NOT EXISTS index_node1 ON channels(node1);
-CREATE INDEX IF NOT EXISTS index_opentx ON channels(open_transaction);
-CREATE INDEX IF NOT EXISTS index_closetx ON channels(close_transaction);
-CREATE INDEX IF NOT EXISTS index_address ON channels(address);
+CREATE INDEX IF NOT EXISTS index_nodes ON channels USING gin (nodes);
+CREATE INDEX IF NOT EXISTS index_open ON channels USING gin ((onchain->'open'));
+CREATE INDEX IF NOT EXISTS index_close ON channels USING gin ((onchain->'close'));
 GRANT SELECT ON channels TO web_anon;
 
 CREATE TABLE IF NOT EXISTS nodealiases (
@@ -54,20 +72,21 @@ CREATE MATERIALIZED VIEW nodes AS
     GROUP BY pubkey
   ), open AS (
     SELECT pubkey, count(*) AS openchannels, sum(satoshis) AS capacity FROM (
-      SELECT node0 AS pubkey, * FROM channels UNION ALL SELECT node1 AS pubkey, * FROM channels
-    )x WHERE close_block IS NULL GROUP BY pubkey
+      SELECT nodes->>0 AS pubkey, * FROM channels UNION ALL SELECT nodes->>1 AS pubkey, * FROM channels
+    )x WHERE onchain->'close'->>'block' IS NULL GROUP BY pubkey
   ), agg AS (
     SELECT pubkey,
-      min(open_block) AS oldestchannel,
-      count(close_block) AS closedchannels,
-      avg(CASE WHEN close_block IS NOT NULL
-        THEN close_block
-        ELSE (SELECT open_block FROM channels ORDER BY open_block DESC LIMIT 1)
-      END - open_block) AS avg_duration,
-      avg(open_fee) AS avg_open_fee,
-      avg(close_fee) AS avg_close_fee
+      min((onchain->'open'->>'block')::int) AS oldestchannel,
+      count(onchain->'close'->>'block' IS NOT NULL) AS closedchannels,
+      avg(CASE WHEN onchain->'close'->>'block' IS NOT NULL
+        THEN (onchain->'close'->>'block')::int
+        ELSE (SELECT (onchain->'open'->>'block')::int FROM channels
+              ORDER BY (onchain->'open'->>'block')::int DESC LIMIT 1)
+      END - (onchain->'open'->>'block')::int) AS avg_duration,
+      avg((onchain->'open'->>'fee')::int) AS avg_open_fee,
+      avg((onchain->'close'->>'fee')::int) AS avg_close_fee
     FROM (
-      SELECT node0 AS pubkey, * FROM channels UNION ALL SELECT node1 AS pubkey, * FROM channels
+      SELECT nodes->>0 AS pubkey, * FROM channels UNION ALL SELECT nodes->>1 AS pubkey, * FROM channels
     )z GROUP BY pubkey
   )
   SELECT
@@ -90,18 +109,18 @@ CREATE MATERIALIZED VIEW globalstats AS
   WITH last_block AS (
     SELECT max(b) AS last_block
     FROM (
-        SELECT max(open_block) AS b FROM channels
+        SELECT max((onchain->'open'->>'block')::int) AS b FROM channels
       UNION ALL
-        SELECT max(close_block) AS b FROM channels
+        SELECT max((onchain->'close'->>'block')::int) AS b FROM channels
     )x
   ), channels AS (
     SELECT
-      max(CASE
-        WHEN close_block IS NOT NULL THEN close_block
+      max(CASE WHEN onchain->'close'->>'block' IS NULL
+        THEN (onchain->'close'->>'block')::int
         ELSE (SELECT last_block FROM last_block)
-      END - open_block) AS max_duration,
-      max(open_fee) AS max_open_fee,
-      max(close_fee) AS max_close_fee,
+      END - (onchain->'open'->>'block')::int) AS max_duration,
+      max((onchain->'open'->>'fee')::int) AS max_open_fee,
+      max((onchain->'close'->>'fee')::int) AS max_close_fee,
       max(satoshis) AS max_satoshis
     FROM channels
   ), nodes AS (
@@ -135,25 +154,26 @@ GRANT SELECT ON globalstats TO web_anon;
 
 CREATE MATERIALIZED VIEW closetypes AS
   WITH base AS (
-    SELECT (close_block/1000)*1000 AS blockgroup,
-      CASE WHEN close_type = 'force' AND close_balance_b = 0 AND close_htlc_count = 0
-        THEN 'force_unused'
-        ELSE close_type
-      END AS t,
-      count(close_type) AS c,
+    SELECT
+      ((onchain->'close'->>'block')::int / 1000) * 1000 AS blockgroup,
+      onchain->'close'->>'type' AS typ,
+      (onchain->'close'->'balance'->>'b')::int > 0 AS used,
+      jsonb_array_length(onchain->'close'->'htlcs'->'a') > 0 OR jsonb_array_length(onchain->'close'->'htlcs'->'b') > 0 AS inflight,
+      count(*) AS c,
       sum(satoshis) AS s
     FROM channels
-    WHERE close_type IS NOT NULL
-    GROUP BY blockgroup, t
+    WHERE onchain->'close'->>'block' IS NOT NULL
+    GROUP BY blockgroup, typ, used, inflight
   )
   SELECT
     blockgroup,
-    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'unknown')x), '{"c": 0, "s": 0}'::jsonb) AS unknown,
-    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'unused')x), '{"c": 0, "s": 0}'::jsonb) AS unused,
-    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'mutual')x), '{"c": 0, "s": 0}'::jsonb) AS mutual,
-    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'force')x), '{"c": 0, "s": 0}'::jsonb) AS force,
-    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'force_unused')x), '{"c": 0, "s": 0}'::jsonb) AS force_unused,
-    coalesce((SELECT to_jsonb(x) FROM (SELECT c, s FROM base WHERE base.blockgroup = b.blockgroup AND t = 'penalty')x), '{"c": 0, "s": 0}'::jsonb) AS penalty
+    coalesce((SELECT to_jsonb(x) FROM (SELECT coalesce(sum(c), 0) AS c, coalesce(sum(s), 0) AS s FROM base WHERE base.blockgroup = b.blockgroup AND typ = 'unknown' OR typ IS NULL)x), '{"c": 0, "s": 0}'::jsonb) AS unknown,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT coalesce(sum(c), 0) AS c, coalesce(sum(s), 0) AS s FROM base WHERE base.blockgroup = b.blockgroup AND typ = 'mutual' AND NOT used)x), '{"c": 0, "s": 0}'::jsonb) AS mutual_unused,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT coalesce(sum(c), 0) AS c, coalesce(sum(s), 0) AS s FROM base WHERE base.blockgroup = b.blockgroup AND typ = 'mutual' AND used)x), '{"c": 0, "s": 0}'::jsonb) AS mutual,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT coalesce(sum(c), 0) AS c, coalesce(sum(s), 0) AS s FROM base WHERE base.blockgroup = b.blockgroup AND typ = 'force' AND inflight)x), '{"c": 0, "s": 0}'::jsonb) AS force_inflight,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT coalesce(sum(c), 0) AS c, coalesce(sum(s), 0) AS s FROM base WHERE base.blockgroup = b.blockgroup AND typ = 'force' AND used AND NOT inflight)x), '{"c": 0, "s": 0}'::jsonb) AS force,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT coalesce(sum(c), 0) AS c, coalesce(sum(s), 0) AS s FROM base WHERE base.blockgroup = b.blockgroup AND typ = 'force' AND NOT used AND NOT inflight)x), '{"c": 0, "s": 0}'::jsonb) AS force_unused,
+    coalesce((SELECT to_jsonb(x) FROM (SELECT coalesce(sum(c), 0) AS c, coalesce(sum(s), 0) AS s FROM base WHERE base.blockgroup = b.blockgroup AND typ = 'penalty')x), '{"c": 0, "s": 0}'::jsonb) AS penalty
   FROM base AS b
   WHERE blockgroup IS NOT NULL
   GROUP BY blockgroup
@@ -177,40 +197,84 @@ RETURNS TABLE (
     sum(htlcs) AS htlcs
   FROM (
       -- initial aggregates
-      SELECT (($1/100)-1)*100 AS blockgroup,
+      SELECT ((since_block/100)-1)*100 AS blockgroup,
         count(*) AS opened,
         0 AS closed,
         sum(satoshis) AS cap_change,
-        sum(open_fee) + sum(close_fee) AS fee,
+        sum((onchain->'open'->>'fee')::int) + sum((onchain->'close'->>'fee')::int) AS fee,
         0 AS htlcs
       FROM channels
-      WHERE open_block < $1
-      GROUP BY (($1/100)-1)*100
+      WHERE (onchain->'open'->>'block')::int < since_block
+      GROUP BY ((since_block/100)-1)*100
     UNION ALL
       -- ongoing opens
-      SELECT (open_block/100)*100 AS blockgroup,
-        count(open_block) AS opened,
+      SELECT ((onchain->'open'->>'block')::int/100)*100 AS blockgroup,
+        count((onchain->'open'->>'block')::int) AS opened,
         0 AS closed,
         sum(satoshis) AS cap_change,
-        sum(open_fee) AS fee,
+        sum((onchain->'open'->>'fee')::int) AS fee,
         0 AS htlcs
       FROM channels
-      WHERE open_block >= $1
-      GROUP BY open_block/100
+      WHERE (onchain->'open'->>'block')::int >= since_block
+      GROUP BY (onchain->'open'->>'block')::int/100
     UNION ALL
       -- ongoing closes
-      SELECT (close_block/100)*100 AS blockgroup,
+      SELECT ((onchain->'close'->>'block')::int/100)*100 AS blockgroup,
         0 AS opened,
-        count(close_block) AS closed,
+        count((onchain->'close'->>'block')::int) AS closed,
         -sum(satoshis) AS cap_change,
-        sum(close_fee) AS fee,
-        sum(close_htlc_count) AS htlcs
+        sum((onchain->'close'->>'fee')::int) AS fee,
+        sum(jsonb_array_length(onchain->'close'->'htlcs'->'a') + jsonb_array_length(onchain->'close'->'htlcs'->'b')) AS htlcs
       FROM channels
-      WHERE close_block IS NOT NULL AND close_block >= $1
-      GROUP BY close_block/100
+      WHERE onchain->'close'->>'block' IS NOT NULL AND (onchain->'close'->>'block')::int >= since_block
+      GROUP BY (onchain->'close'->>'block')::int/100
   ) AS main
   GROUP BY blockgroup
   ORDER BY blockgroup
+$$ LANGUAGE SQL STABLE;
+
+-- assess how much a channel closure was bad
+CREATE OR REPLACE FUNCTION crash (c channels) RETURNS integer AS $$
+  SELECT
+    CASE
+      WHEN c.onchain->'close'->>'type' = 'penalty' THEN c.satoshis / 10000
+      WHEN c.onchain->'close'->>'type' = 'force' THEN
+        10
+        + (jsonb_array_length(c.onchain->'close'->'htlcs'->'a')
+           * (CASE WHEN c.onchain->>'closer' = 'a' THEN 15 ELSE 8 END))
+        + (jsonb_array_length(c.onchain->'close'->'htlcs'->'b')
+          * (CASE WHEN c.onchain->>'closer' = 'b' THEN 15 ELSE 8 END))
+        + (CASE WHEN (c.onchain->'close'->'balance'->>'b')::int = 0 THEN 5 ELSE 0 END)
+        + (144 * 15
+          / ((c.onchain->'close'->>'block')::int - (c.onchain->'open'->>'block')::int))
+      ELSE 0
+    END
+$$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION crashed_channels ()
+RETURNS TABLE (
+  short_channel_id text,
+  crash int,
+  satoshis int,
+  outstanding_htlcs int,
+  closer text,
+  closer_name text,
+  close_type text,
+  duration int
+) AS $$
+  SELECT
+    short_channel_id,
+    channels.crash,
+    satoshis,
+    jsonb_array_length(onchain->'close'->'htlcs'->'a') + jsonb_array_length(onchain->'close'->'htlcs'->'b'),
+    nodes->>(onchain->>(onchain->>'closer'))::int,
+    ( SELECT alias FROM nodes
+      WHERE pubkey = nodes->>(onchain->>(onchain->>'closer'))::int ),
+    onchain->'close'->>'type',
+    (onchain->'close'->>'block')::int - (onchain->'open'->>'block')::int
+  FROM channels
+  WHERE channels.crash IS NOT NULL
+  ORDER BY channels.crash DESC
 $$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION longest_living_channels(last_block int)
@@ -232,62 +296,68 @@ RETURNS TABLE (
     close_block,
     close_block - open_block AS duration,
     closed,
-    node0 AS id0,
-    coalesce((SELECT alias FROM nodes WHERE pubkey = node0), '') AS name0,
-    node1 AS id1,
-    coalesce((SELECT alias FROM nodes WHERE pubkey = node1), '') AS name1,
+    nodes->>0 AS id0,
+    coalesce((SELECT alias FROM nodes WHERE pubkey = nodes->>0), '') AS name0,
+    nodes->>1 AS id1,
+    coalesce((SELECT alias FROM nodes WHERE pubkey = nodes->>1), '') AS name1,
     satoshis
   FROM (
     SELECT short_channel_id,
-      open_block,
-      CASE
-        WHEN close_block IS NOT NULL THEN close_block
-        ELSE $1
+      (onchain->'open'->>'block')::int AS open_block,
+      CASE WHEN onchain->'close'->>'block' IS NOT NULL
+        THEN (onchain->'close'->>'block')::int
+        ELSE last_block
       END AS close_block,
-      (close_block IS NOT NULL) AS closed,
-      node0, node1, satoshis
+      (onchain->'close'->>'block' IS NOT NULL) AS closed,
+      nodes,
+      satoshis
     FROM channels
-  )x ORDER BY duration DESC LIMIT 50
+    WHERE onchain->'open'->>'block' IS NOT NULL
+  )x
+  ORDER BY duration DESC
 $$ LANGUAGE SQL STABLE;
 
-CREATE OR REPLACE FUNCTION node_channels (pubkey text)
+CREATE OR REPLACE FUNCTION node_channels (nodepubkey text)
 RETURNS TABLE (
   short_channel_id text,
-  peer_id text,
-  peer_name text,
-  peer_size bigint,
-  open_block int,
-  open_fee int,
-  close_block int,
-  close_fee int,
+  peer jsonb,
+  onchain jsonb,
   satoshis int,
-  outgoing_fee_per_millionth numeric(13),
-  outgoing_base_fee_millisatoshi numeric(13),
-  outgoing_delay int,
-  incoming_base_fee_millisatoshi numeric(13),
-  incoming_fee_per_millionth numeric(13),
-  incoming_delay int,
-  close_type text,
-  close_htlc_count int
+  outpol jsonb,
+  inpol jsonb
 ) AS $$
   SELECT
     channels.short_channel_id,
-    CASE WHEN node0 = $1 THEN node1 ELSE node0 END AS peer_id,
-    coalesce((SELECT alias FROM nodes WHERE pubkey = (CASE WHEN node0 = $1 THEN node1 ELSE node0 END)), '') AS peer_name,
-    coalesce((SELECT capacity FROM nodes WHERE pubkey = (CASE WHEN node0 = $1 THEN node1 ELSE node0 END)), 0) AS peer_size,
-    open_block,
-    open_fee,
-    close_block,
-    close_fee,
+    jsonb_build_object(
+      'id',
+        (nodes - nodepubkey)->>0,
+      'name',
+        coalesce(
+          (SELECT alias FROM nodes WHERE pubkey = ((nodes - nodepubkey)->>0)
+        ), ''),
+      'size',
+        coalesce(
+          (SELECT capacity FROM nodes WHERE pubkey = ((nodes - nodepubkey)->>0)
+        ), 0)
+    ) AS peer,
+    onchain,
     satoshis,
-    split_part(p_out.fee_per_millionth, '~', 2)::numeric(13) AS outgoing_fee_per_millionth,
-    split_part(p_out.base_fee_millisatoshi, '~', 2)::numeric(13) AS outgoing_base_fee_millisatoshi,
-    split_part(p_out.delay, '~', 2)::int AS outgoing_delay,
-    split_part(p_in.base_fee_millisatoshi, '~', 2)::numeric(13) AS incoming_base_fee_millisatoshi,
-    split_part(p_in.fee_per_millionth, '~', 2)::numeric(13) AS incoming_fee_per_millionth,
-    split_part(p_in.delay, '~', 2)::int AS incoming_delay,
-    close_type,
-    close_htlc_count
+    jsonb_build_object(
+      'base',
+        split_part(p_out.fee_per_millionth, '~', 2)::numeric(13),
+      'rate',
+        split_part(p_out.base_fee_millisatoshi, '~', 2)::numeric(13),
+      'delay',
+        split_part(p_out.delay, '~', 2)::int
+    ) AS out,
+    jsonb_build_object(
+      'base',
+        split_part(p_in.base_fee_millisatoshi, '~', 2)::numeric(13),
+      'rate',
+        split_part(p_in.fee_per_millionth, '~', 2)::numeric(13),
+      'delay',
+        split_part(p_in.delay, '~', 2)::int
+    ) AS in
   FROM channels
   LEFT OUTER JOIN (
     SELECT
@@ -300,7 +370,7 @@ RETURNS TABLE (
     GROUP BY short_channel_id, direction
   ) AS p_out
      ON p_out.short_channel_id = channels.short_channel_id
-    AND p_out.direction = CASE WHEN node0 = $1 THEN 1 ELSE 0 END
+    AND p_out.direction = CASE WHEN nodes->>0 = nodepubkey THEN 1 ELSE 0 END
   LEFT OUTER JOIN (
     SELECT
       short_channel_id,
@@ -312,29 +382,9 @@ RETURNS TABLE (
     GROUP BY short_channel_id, direction
   ) AS p_in
      ON p_in.short_channel_id = channels.short_channel_id
-    AND p_in.direction = CASE WHEN node0 = $1 THEN 0 ELSE 1 END
-  WHERE node0 = $1 OR node1 = $1
-  ORDER BY open_block DESC
-$$ LANGUAGE SQL STABLE;
-
-CREATE OR REPLACE FUNCTION channel_data (short_channel_id text)
-RETURNS TABLE (
-  open_block int, open_fee int, open_transaction text, open_time timestamp,
-  close_block int, close_fee int, close_transaction text, close_time timestamp,
-  address text, node0 text, node1 text, satoshis int,
-  short_channel_id text, node0name text, node1name text,
-  close_type text, close_htlc_count int, close_balance_a int, close_balance_b int
-) AS $$
-SELECT
-  open_block, open_fee, open_transaction, open_time,
-  close_block, close_fee, close_transaction, close_time,
-  address, node0, node1, satoshis,
-  short_channel_id, coalesce(n0.alias, ''), coalesce(n1.alias, ''),
-  close_type, close_htlc_count, close_balance_a, close_balance_b
-FROM channels
-LEFT OUTER JOIN nodes AS n0 ON n0.pubkey = node0
-LEFT OUTER JOIN nodes AS n1 ON n1.pubkey = node1
-WHERE short_channel_id = $1
+    AND p_in.direction = CASE WHEN nodes->>0 = nodepubkey THEN 0 ELSE 1 END
+  WHERE nodes ? nodepubkey
+  ORDER BY (onchain->'open'->>'block')::int DESC
 $$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION search(query text)
@@ -353,9 +403,15 @@ RETURNS TABLE (
       'channel' AS kind,
       short_channel_id || ' (' || satoshis || ' sat)' AS label,
       '/channel/' || short_channel_id AS url,
-      close_block IS NOT NULL AS closed
+      onchain->'close'->>'block' IS NOT NULL AS closed
     FROM channels
-    WHERE short_channel_id >= (SELECT query FROM q) and short_channel_id < (SELECT query FROM q) || 'Z' OR open_transaction = (SELECT query FROM q) OR close_transaction = (SELECT query FROM q) OR address = (SELECT query FROM q)
+    WHERE (
+          short_channel_id >= (SELECT query FROM q)
+      AND short_channel_id < (SELECT query FROM q) || 'Z'
+    )
+      OR onchain->'open'->>'txid' = (SELECT query FROM q)
+      OR onchain->'close'->>'txid' = (SELECT query FROM q)
+      OR onchain->'open'->>'address' = (SELECT query FROM q)
   UNION ALL
     SELECT
       'node' AS kind,

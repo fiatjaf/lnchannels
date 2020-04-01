@@ -14,13 +14,13 @@
     for (let i = channels.length - 1; i >= 0; i--) {
       let chan = channels[i]
 
-      if (!chan.close_block) {
+      if (!chan.onchain.close.block) {
         // if it's open add to bubble chart
         bubbledata.push({
-          x: chan.open_block,
+          x: chan.onchain.open.block,
           y: chan.satoshis,
-          z: chan.peer_size,
-          name: chan.peer_name,
+          z: chan.peer.size,
+          name: chan.peer.name,
           scid: chan.short_channel_id
         })
       }

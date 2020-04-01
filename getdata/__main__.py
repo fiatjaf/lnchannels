@@ -1,13 +1,10 @@
-import os
 import psycopg2
 
+from .globals import POSTGRES_URL
 from .listchannels import listchannels
 from .listnodes import listnodes
-from .enrich import enrich
-from .checkcloses import checkcloses
-from .closuretype import closuretypes
-
-POSTGRES_URL = os.getenv("POSTGRES_URL")
+from .onchain import onchain
+from .chain_analysis import chain_analysis
 
 
 def main():
@@ -23,16 +20,12 @@ def main():
             listnodes(db)
 
         with conn.cursor() as db:
-            print("enriching")
-            enrich(db)
+            print("inserting onchain stuff")
+            onchain(db)
 
         with conn.cursor() as db:
-            print("checking closes")
-            checkcloses(db)
-
-        with conn.cursor() as db:
-            print("determine closure type")
-            closuretypes(db)
+            print("performing chain analysis")
+            chain_analysis(db)
 
         with conn.cursor() as db:
             db.execute("REFRESH MATERIALIZED VIEW nodes")

@@ -12,3 +12,4 @@ venv
 static/bundle.*
 node_modules
 bigsun_missing.pkl
+last_inspected_channel

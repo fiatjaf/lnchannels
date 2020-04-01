@@ -21,23 +21,29 @@
 
     for (let i = channels.length - 1; i >= 0; i--) {
       let chan = channels[i]
+      let open_block = chan.onchain.open.block
+      let close_block = chan.onchain.close.block
+
+      console.log(open_block, close_block)
 
       // gather data for the chart
-      opens[chan.open_block] = opens[chan.open_block] || 0
-      open_sats[chan.open_block] = open_sats[chan.open_block] || 0
-      opens[chan.open_block]++
-      open_sats[chan.open_block] += chan.satoshis
-      blockmap[chan.open_block] = true
+      opens[open_block] = opens[open_block] || 0
+      open_sats[open_block] = open_sats[open_block] || 0
+      opens[open_block]++
+      open_sats[open_block] += chan.satoshis
+      blockmap[open_block] = true
 
-      if (chan.close_block) {
+      if (close_block) {
         // if it's closed gather close data
-        closes[chan.close_block] = closes[chan.close_block] || 0
-        close_sats[chan.close_block] = close_sats[chan.close_block] || 0
-        closes[chan.close_block]++
-        close_sats[chan.close_block] += chan.satoshis
-        blockmap[chan.close_block] = true
+        closes[close_block] = closes[close_block] || 0
+        close_sats[close_block] = close_sats[close_block] || 0
+        closes[close_block]++
+        close_sats[close_block] += chan.satoshis
+        blockmap[close_block] = true
       }
     }
+
+    console.log(blockmap)
 
     // make main chart
     let blocks = Object.keys(blockmap).sort()
