@@ -1,6 +1,5 @@
 import json
 import requests
-from pprint import pprint as pp
 
 from .globals import ESPLORA, bitcoin
 
@@ -22,13 +21,13 @@ def onchain(db):
 
     db.execute(
         """
-SELECT short_channel_id, coalesce(onchain, '{}'::jsonb)
+SELECT short_channel_id, onchain
 FROM channels
 WHERE onchain IS NULL
-  OR ( (onchain->'close'->'block' IS NULL OR onchain->'close'->'block' = 'null')
+  OR ( (onchain->'close'->'block' IS NULL OR onchain->'close'->>'block' IS NULL)
    AND last_seen < now() - '1 day'::interval
   )
-  OR ( (onchain->'close'->'type' IS NULL OR onchain->'close'->'type' = 'null')
+  OR ( (onchain->'close'->'type' IS NULL OR onchain->'close'->>'type' IS NULL)
    AND last_seen < now() - '7 days'::interval
   )
 ORDER BY short_channel_id
@@ -74,8 +73,6 @@ def onchain_for_scid(db, scid, data):
     except OnchainError as exc:
         print(exc)
         return
-
-    pp(data)
 
     db.execute(
         """
@@ -145,7 +142,7 @@ def onclose(data):
 
     close_tx = bitcoin.getrawtransaction(data["close"]["txid"], True)
     spends = get_outspends(data["close"]["txid"])
-    kinds = []
+    kinds = set()
     htlcs = []
 
     # inspect each output of the closing transaction
@@ -157,25 +154,25 @@ def onclose(data):
 
         if spend["spent"] == False:
             # big indicator of mutual closure
-            kind = "any"
+            kinds.add("any")
             next_side = "b"
             data["close"]["balance"][side] = amount
         else:
             f = bitcoin.getrawtransaction(spend["txid"], True)
             witness = f["vin"][spend["vin"]]["txinwitness"]
-            kind = "unknown"
+            kinds.add("unknown")
             script = None
 
             if len(witness) == 2:
                 # paying to a pubkey
-                kind = "any"
+                kinds.add("any")
                 next_side = "b"
                 data["close"]["balance"][side] = amount
                 txs[side].add(spend["txid"])
             else:
                 script = bitcoin.decodescript(witness[-1])["asm"]
                 if "OP_HASH160" in script:
-                    kind = "htlc"
+                    kinds.add("htlc")
                     htlcs.append(
                         {
                             "script": script,
@@ -193,12 +190,12 @@ def onclose(data):
                             txs[side].add(next_spend["txid"])
 
                     if witness[-2] == "01":
-                        kind = "penalty"
+                        kinds.add("penalty")
                         # we keep treating this as if 'a' and 'b' were different
                         # but we'll know they're the same node
 
                     else:
-                        kind = "delayed"
+                        kinds.add("delayed")
 
                         # in case of a delayed output, we know this was the force-closer
                         data["closer"] = side
@@ -210,13 +207,20 @@ def onclose(data):
                     # paying to a custom address, means the same as a pubkey
                     # (it's anything the peer wants to spend to either in a
                     #  mutual close or when the other party is force-closing)
-                    kind = "any"
+                    kinds.add("any")
                     data["close"]["balance"][side] = amount
                     txs[side].add(spend["txid"])
-
                     next_side = "b"
 
-        kinds.append(kind)
+    # now that we have kinds of all outputs we can determine the closure type
+    if kinds == {"any"}:
+        data["close"]["type"] = "mutual"
+    elif "penalty" in kinds:
+        data["close"]["type"] = "penalty"
+    elif "htlc" in kinds or "delayed" in kinds:
+        data["close"]["type"] = "force"
+    else:
+        data["close"]["type"] = "unknown"
 
     # in case of htlcs, we want to know to each side they went
     if data["closer"]:
@@ -279,21 +283,6 @@ def onclose(data):
 
     data["txs"]["a"] = list(txs["a"])
     data["txs"]["b"] = list(txs["b"])
-
-    # now that we have kinds of all outputs we can determine the closure type
-    typ = "unknown"
-    if len(kinds) == 1 and kinds[0] == "any":
-        typ = "unused"
-    elif len(kinds) == 2 and kinds[0] == "any" and kinds[1] == "any":
-        typ = "mutual"
-    else:
-        for kind in kinds:
-            if kind == "htlc" or kind == "delayed":
-                typ = "force"
-            elif kind == "penalty":
-                typ = "penalty"
-                break
-    data["close"]["type"] = typ
 
 
 def get_outspends(txid):
