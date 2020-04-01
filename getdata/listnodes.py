@@ -30,18 +30,21 @@ SELECT last_seen FROM (
             db.execute(
                 """
 UPDATE nodealiases
-SET last_seen = now()
+SET
+  last_seen = now(),
+  color = %s
 WHERE last_seen = %s AND pubkey = %s
             """,
-                (last_seen, node["nodeid"]),
+                (node.get("color", ""), last_seen, node["nodeid"]),
             )
         else:
             db.execute(
                 """
-INSERT INTO nodealiases (pubkey, alias, first_seen, last_seen)
-VALUES (%s, %s, now(), now())
+INSERT INTO nodealiases
+  (pubkey, color, alias, first_seen, last_seen)
+VALUES (%s, %s, %s, now(), now())
             """,
-                (node["nodeid"], node.get("alias", "")),
+                (node["nodeid"], node.get("color", ""), node.get("alias", "")),
             )
 
         print("inserted", node["nodeid"])

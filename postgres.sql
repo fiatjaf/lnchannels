@@ -34,9 +34,7 @@ CREATE TABLE IF NOT EXISTS channels (
     }
   }',
   satoshis integer NOT NULL,
-  last_seen timestamp NOT NULL,
-
-  CONSTRAINT checknodes
+  last_seen timestamp NOT NULL
 );
 CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id);
 CREATE INDEX IF NOT EXISTS index_nodes ON channels USING gin (nodes);
@@ -47,6 +45,7 @@ GRANT SELECT ON channels TO web_anon;
 CREATE TABLE IF NOT EXISTS nodealiases (
   pubkey text NOT NULL,
   alias text NOT NULL,
+  color text,
   first_seen timestamp NOT NULL,
   last_seen timestamp NOT NULL
 );
