@@ -7,7 +7,10 @@
 
   var notfound = false
   var channel = {
-    short_channel_id: 'loading'
+    short_channel_id: 'loading',
+    nodes: ['', ''],
+    names: ['', ''],
+    onchain: {open: {}, close: {}}
   }
   var upwardpolicies = []
   var downwardpolicies = []
@@ -19,16 +22,40 @@
 
   onMount(async () => {
     stats = await getContext('stats')
+  })
 
+  onMount(async () => {
     let res = await (
-      await fetch(`/api/rpc/channel_data?short_channel_id=${id}`)
+      await fetch(`/api/channels?short_channel_id=eq.${id}`)
     ).json()
     if (res.length === 0) {
       notfound = true
     } else {
       channel = res[0]
+      channel.names = channel.nodes.map(abbr)
+      fetchAlias(channel.nodes[0])
+      fetchAlias(channel.nodes[1])
     }
   })
+
+  async function fetchAlias(nodeidx) {
+    let pubkey = channel.nodes[nodeidx]
+
+    let res = await (
+      await fetch(
+        `/api/nodealiases?pubkey=eq.${pubkey}&select=alias&order=last_seen.desc`,
+        {
+          headers: {
+            'Range-Unit': 'items',
+            Range: '0-1'
+          }
+        }
+      )
+    ).json()
+    if (res.length) {
+      channel.aliases[nodeidx] = res[0].alias
+    }
+  }
 
   onMount(async () => {
     let policies = await (
@@ -48,7 +75,7 @@
   <title>channel {channel.short_channel_id}</title>
   <meta
     name="description"
-    content="Information about the Lightning Network channel {channel.short_channel_id} between {channel.node0name} and {channel.node1name}"
+    content="Information about the Lightning Network channel {channel.short_channel_id} between {channel.names[0]} and {channel.names[1]}"
   />
 </svelte:head>
 
@@ -58,7 +85,7 @@
 <div>
   <h1>
     channel
-    <pre class="id" class:closed="{channel.close_block}">
+    <pre class="id" class:closed="{channel.onchain.close.block}">
     {channel.short_channel_id}
   </pre
     >
@@ -80,20 +107,18 @@
         <table>
           <tr>
             <td>
-              {#if channel.node0name} {channel.node0name} {:else}
-              {abbr(channel.node0)} {/if}
+              {channel.names[0]}
             </td>
             <td>
-              {#if channel.node1name} {channel.node1name} {:else}
-              {abbr(channel.node1)} {/if}
+              {channel.names[1]}
             </td>
           </tr>
           <tr>
             <td>
-              <a href="/node/{channel.node0}">{abbr(channel.node0)}</a>
+              <a href="/node/{channel.nodes[0]}">{abbr(channel.nodes[0])}</a>
             </td>
             <td>
-              <a href="/node/{channel.node1}">{abbr(channel.node1)}</a>
+              <a href="/node/{channel.nodes[1]}">{abbr(channel.nodes[1])}</a>
             </td>
           </tr>
         </table>
@@ -102,16 +127,17 @@
     <tr>
       <th>duration</th>
       <td>
-        {#if channel.close_block} {channel.close_block - channel.open_block}
-        blocks
+        {#if channel.onchain.close.block} {channel.onchain.close.block -
+        channel.onchain.open.block} blocks
         <i
           class="bar"
-          style="width:{100 * (channel.close_block - channel.open_block) / stats.max_channel_duration}%; background: var(--gold)"
+          style="width:{100 * (channel.onchain.close.block - channel.onchain.open.block) / stats.max_channel_duration}%; background: var(--gold)"
         />
-        {:else} {stats.last_block - channel.open_block} blocks and counting
+        {:else} {stats.last_block - channel.onchain.open.block} blocks and
+        counting
         <i
           class="bar"
-          style="width:{100 * (stats.last_block - channel.open_block) / stats.max_channel_duration}%; background: var(--gold)"
+          style="width:{100 * (stats.last_block - channel.onchain.open.block) / stats.max_channel_duration}%; background: var(--gold)"
         />
         {/if}
       </td>
@@ -126,8 +152,7 @@
       <caption>
         from
         <code>
-          {#if channel.node0name} {channel.node0name} {:else}
-          {abbr(channel.node0)} {/if}
+          {channel.names[0]}
         </code>
       </caption>
       <thead>
@@ -154,8 +179,7 @@
       <caption>
         from
         <code>
-          {#if channel.node1name} {channel.node1name} {:else}
-          {abbr(channel.node1)} {/if}
+          {channel.names[1]}
         </code>
       </caption>
       <thead>
@@ -195,50 +219,52 @@
       <th>open</th>
       <td>
         <a
-          href="https://blockstream.info/block/{channel.open_block}"
-          title="{channel.open_time}"
+          href="https://blockstream.info/block/{channel.onchain.open.block}"
+          title="{channel.onchain.open.time}"
         >
-          {channel.open_block}
+          {channel.onchain.open.block}
         </a>
       </td>
       <td>
         <a
-          href="https://blockstream.info/tx/{channel.open_transaction}?output:{channel.short_channel_id.split('x')[2]"
+          href="https://blockstream.info/tx/{channel.onchain.open.txid}?output:{channel.short_channel_id.split('x')[2]}"
         >
-          {channel.open_transaction}
+          {channel.onchain.open.txid}
         </a>
       </td>
-      <td>{channel.open_fee} sat</td>
+      <td>{channel.onchain.open.fee} sat</td>
     </tr>
-    {#if channel.close_block}
+    {#if channel.onchain.close.block}
     <tr>
       <th>close</th>
       <td>
         <a
-          href="https://blockstream.info/block/{channel.close_block}"
-          title="{channel.close_time}"
+          href="https://blockstream.info/block/{channel.onchain.close.block}"
+          title="{channel.onchain.close.time}"
         >
-          {channel.close_block}
+          {channel.onchain.close.block}
         </a>
       </td>
       <td>
-        <a href="https://blockstream.info/tx/{channel.close_transaction}">
-          {channel.close_transaction}
+        <a href="https://blockstream.info/tx/{channel.onchain.close.txid}">
+          {channel.onchain.close.txid}
         </a>
-        {#if channel.close_type}
-        <div>close type: <strong>{channel.close_type}</strong></div>
-        {#if channel.close_htlc_count > 0}
+        {#if channel.onchain.close.type}
+        <div>close type: <strong>{channel.onchain.close.type}</strong></div>
+        {#if channel.onchain.close.htlcs.a.length +
+        channel.onchain.close.htlcs.b.length > 0}
         <div>
-          outstanding HTLCs: {channel.close_htlc_count}
+          outstanding HTLCs: {channel.channel.onchain.close.htlcs.a.length +
+          channel.onchain.close.htlcs.b.length}
         </div>
         {/if}
         <div>
-          <em>{channel.close_balance_a} sat</em> ↹
-          <em>{channel.close_balance_b} sat</em>
+          <em>{channel.onchain.close.balance.a} sat</em> ↹
+          <em>{channel.onchain.close.balance.b} sat</em>
         </div>
         {/if}
       </td>
-      <td>{channel.close_fee} sat</td>
+      <td>{channel.onchain.close.fee} sat</td>
     </tr>
     {/if}
   </table>

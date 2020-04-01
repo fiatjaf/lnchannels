@@ -10,29 +10,45 @@
   var chart
 
   var blocks = []
-  export var chartType = 'counts' // or 'sizes'
+
+  var chartType = 'counts' // or 'sizes'
+  var stacking = 'percent' // or 'normal' or null
+
+  const seriesColors = [
+    ['unknown', '#e4dfda'],
+    ['mutual_unused', '#4cc9ba'],
+    ['mutual', '#46af5d'],
+    ['force_inflight', '#bc703a'],
+    ['force', '#db9d4c'],
+    ['force_unused', '#bf7959'],
+    ['penalty', '#d12323']
+  ]
+
   var chartAggregates = {
-    counts: {
-      unknown: [],
-      unused: [],
-      mutual: [],
-      force: [],
-      force_unused: [],
-      penalty: []
-    },
-    sizes: {
-      unknown: [],
-      unused: [],
-      mutual: [],
-      force: [],
-      force_unused: [],
-      penalty: []
-    }
+    counts: {},
+    sizes: {}
   }
 
-  function toggle(e) {
+  for (let i = 0; i < seriesColors.length; i++) {
+    let [serie, _] = seriesColors[i]
+    chartAggregates.counts[serie] = []
+    chartAggregates.sizes[serie] = []
+  }
+
+  function toggleType(e) {
     e.preventDefault()
     chartType = chartType === 'counts' ? 'sizes' : 'counts'
+    buildChart()
+  }
+
+  function toggleStacking(e) {
+    e.preventDefault()
+    stacking =
+      stacking === 'percent'
+        ? 'normal'
+        : stacking === 'normal'
+        ? undefined
+        : 'percent'
     buildChart()
   }
 
@@ -52,19 +68,12 @@
         {visible: false},
         {visible: false}
       ],
-      series: [
-        ['unknown', '#e4dfda'],
-        ['unused', 'var(--green)'],
-        ['mutual', 'var(--blue)'],
-        ['force', '#f58f29'],
-        ['force_unused', '#7d4600'],
-        ['penalty', 'var(--red)']
-      ].map(([name, color]) => ({
+      series: seriesColors.map(([name, color]) => ({
         name,
         data: chartAggregates[chartType][name],
         color
       })),
-      plotOptions: {...plotOptions, areaspline: {stacking: 'percent'}}
+      plotOptions: {...plotOptions, areaspline: {stacking: stacking}}
     })
   }
 
@@ -81,18 +90,11 @@
     for (let i = 0; i < data.length; i++) {
       let ct = data[i]
       blocks.push(ct.blockgroup)
-      chartAggregates.counts.unknown.push(ct.unknown.c)
-      chartAggregates.counts.unused.push(ct.unused.c)
-      chartAggregates.counts.mutual.push(ct.mutual.c)
-      chartAggregates.counts.force.push(ct.force.c)
-      chartAggregates.counts.force_unused.push(ct.force_unused.c)
-      chartAggregates.counts.penalty.push(ct.penalty.c)
-      chartAggregates.sizes.unknown.push(ct.unknown.s)
-      chartAggregates.sizes.unused.push(ct.unused.s)
-      chartAggregates.sizes.mutual.push(ct.mutual.s)
-      chartAggregates.sizes.force.push(ct.force.s)
-      chartAggregates.sizes.force_unused.push(ct.force_unused.s)
-      chartAggregates.sizes.penalty.push(ct.penalty.s)
+      for (let i = 0; i < seriesColors.length; i++) {
+        let [serie, _] = seriesColors[i]
+        chartAggregates.counts[serie].push(ct[serie].c)
+        chartAggregates.sizes[serie].push(ct[serie].s)
+      }
     }
 
     buildChart()
@@ -106,7 +108,11 @@
 <div>
   <h4>
     types of channel closes (by
-    <span class="toggle" on:click="{toggle}">{chartType}</span>)
+    <span class="toggle" on:click="{toggleType}">{chartType}</span>) (<span
+      class="toggle"
+      on:click="{toggleStacking}"
+      >{#if stacking}{stacking}{:else}not stacked{/if}</span
+    >)
   </h4>
   <div bind:this="{el}" />
 </div>

@@ -11,13 +11,20 @@
 
   var longestliving = []
   var topnodes = []
+  var crashed = []
   var stats = {}
 
   onMount(async () => {
     stats = await getContext('stats')
     longestliving = await (
       await fetch(
-        `/api/rpc/longest_living_channels?last_block=${stats.last_block}`
+        `/api/rpc/longest_living_channels?last_block=${stats.last_block}`,
+        {
+          headers: {
+            'Range-Unit': 'item',
+            Range: '0-19'
+          }
+        }
       )
     ).json()
   })
@@ -26,20 +33,43 @@
     stats = await getContext('stats')
     topnodes = await (
       await fetch(
-        `/api/nodes?openchannels=gt.0&order=openchannels.desc&select=pubkey,alias,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity`,
+        `/api/nodes?openchannels=gt.0&select=pubkey,alias,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity&order=openchannels.desc`,
         {
           headers: {
             'Range-Unit': 'items',
-            Range: '0-49'
+            Range: '0-29'
           }
         }
       )
     ).json()
   })
+
+  onMount(async () => {
+    crashed = await (
+      await fetch(`/api/rpc/crashed_channels`, {
+        headers: {
+          'Range-Unit': 'items',
+          Range: '0-29'
+        }
+      })
+    ).json()
+  })
+
+  function normalizeCrash(value, min, max) {
+    const crashMin = 50
+    const crashMax = 800
+
+    if (value > crashMax) return max
+    if (value < crashMin) return min
+    return (
+      (max - min) * ((value - crashMin) / (crashMax - crashMin)) +
+      min
+    ).toFixed(1)
+  }
 </script>
 
 <svelte:head>
-  <title>ln.bigsun.xyz</title>
+  <title>lnchannels</title>
   <meta
     name="description"
     content="All the public Lightning Network channels and information you might want."
@@ -95,6 +125,49 @@
             class="bar"
             style="width:{100 * node.avg_duration / stats.max_node_average_duration}%; background: var(--gold)"
           />
+        </td>
+      </tr>
+      {/each}
+    </tbody>
+  </table>
+</div>
+
+<div>
+  <h4>epic crashes</h4>
+  <table id="crashed">
+    <thead>
+      <tr>
+        <th>short_channel_id</th>
+        <th>satoshis</th>
+        <th>close type</th>
+        <th>HTLCs</th>
+        <th>duration (blocks)</th>
+        <th>unfortunate closer</th>
+      </tr>
+    </thead>
+    <tbody>
+      {#each crashed as chan}
+      <tr
+        style="background-color: hsla(12, 61%, {normalizeCrash(chan.crash, 90, 50)}%, 1)"
+      >
+        <td>
+          <a href="/channel/{chan.short_channel_id}">{chan.short_channel_id}</a>
+        </td>
+        <td>
+          {chan.satoshis}
+        </td>
+        <td>{chan.close_type}</td>
+        <td>{chan.outstanding_htlcs}</td>
+        <td>
+          {chan.duration}
+        </td>
+        <td>
+          {#if chan.closer}
+          <a href="/node/{chan.closer}"
+            >{#if
+            chan.closer_name}{chan.closer_name}{:else}{abbr(chan.closer)}{/if}</a
+          >
+          {:else} unknown {/if}
         </td>
       </tr>
       {/each}
