@@ -3,15 +3,17 @@
 <script>
   import {onMount, getContext} from 'svelte'
   import {abbr, date} from './helpers'
-
+  import NotFound from './NotFound.html'
   import NodeHistory from './charts/NodeHistory.html'
   import Bubbles from './charts/Bubbles.html'
 
-  var loading = true
-
-  var node = {}
+  var notfound = false
+  var node = {
+    pubkey: 'loading',
+    alias: '',
+  }
   var aliases = []
-  var channels = []
+  var channels = null
 
   var maxfee = 0
   var maxcap = 0
@@ -28,21 +30,7 @@
   }
 
   onMount(async () => {
-    let res = await Promise.all([
-      fetch(`/api/nodes?pubkey=eq.${id}`).then(r => r.json()),
-      fetch(
-        `/api/nodealiases?pubkey=eq.${id}&select=first_seen,alias`
-      ).then(r => r.json()),
-      fetch(`/api/rpc/node_channels?pubkey=${id}`).then(r => r.json())
-    ])
-
-    loading = false
-
-    node = res[0][0]
-    aliases = res[1]
-    channels = res[2]
-
-    node.name = node.alias ? `"${node.alias}"` : abbr(node.pubkey)
+    channels = await (await fetch(`/api/rpc/node_channels?pubkey=${id}`)).json()
 
     for (let i = channels.length - 1; i >= 0; i--) {
       // data for the microcharts later
@@ -106,6 +94,21 @@
     //   return trclose
     // }
   })
+
+  onMount(async () => {
+    let res = await (await fetch(`/api/nodes?pubkey=eq.${id}`)).json()
+    if (res.length === 0) {
+      notfound = true
+    } else {
+      node = res[0]
+    }
+  })
+
+  onMount(async () => {
+    aliases = await (
+      await fetch(`/api/nodealiases?pubkey=eq.${id}&select=first_seen,alias`)
+    ).json()
+  })
 </script>
 
 <style>
@@ -143,148 +146,154 @@
   />
 </svelte:head>
 
-{#if loading} loading {:else}
-<h1>
-  node
-  <pre class="id">{node.pubkey}</pre>
-</h1>
+{#if notfound}
+<NotFound />
+{:else}
+<div>
+  <h1>
+    node {node.alias}
+    <pre class="id">{node.pubkey}</pre>
+  </h1>
 
-<div class="flex-col">
-  {#if aliases}
+  <div class="flex-col">
+    {#if aliases.length > 0}
+    <div>
+      <h4>node names</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>first seen</th>
+            <th>alias</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each aliases as alias}
+          <tr>
+            <td>{date(alias.first_seen)}</td>
+            <td>{alias.alias}</td>
+          </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    {/if}
+
+    <div>
+      <table>
+        <tbody>
+          <tr>
+            <th>open channels</th>
+            <td>{node.openchannels}</td>
+          </tr>
+          <tr>
+            <th>closed channels</th>
+            <td>{node.closedchannels}</td>
+          </tr>
+          <tr>
+            <th>avg channel duration</th>
+            <td>{node.avg_duration}</td>
+          </tr>
+          <tr>
+            <th>avg opening fee</th>
+            <td>{node.avg_open_fee}</td>
+          </tr>
+          <tr>
+            <th>avg closing fee</th>
+            <td>{node.avg_close_fee}</td>
+          </tr>
+          <tr>
+            <th>capacity</th>
+            <td>{node.capacity}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {#if channels}
+  <NodeHistory channels="{channels}" />
+  <Bubbles channels="{channels}" />
   <div>
-    <h4>node names</h4>
-    <table>
+    <h4>all channels</h4>
+    <table id="channels-table">
       <thead>
         <tr>
-          <th>first seen</th>
-          <th>alias</th>
+          <th>with</th>
+          <th>id</th>
+          <th>total satoshis</th>
+          <th>chain fee</th>
+          <th>open</th>
+          <th>close</th>
+          <th>
+            {#if direction == "outgoing"} ↗ {:else} ↙ {/if}
+            <span class="toggle" on:click="{toggleDirection}">
+              {direction}
+            </span>
+            fee policy
+          </th>
         </tr>
       </thead>
       <tbody>
-        {#each aliases as alias}
-        <tr>
-          <td>{date(alias.first_seen)}</td>
-          <td>{alias.alias}</td>
+        {#each channels as channel}
+        <tr
+          id="ch-{channel.short_channel_id}"
+          class:closed="{channel.close_block > 0}"
+        >
+          <td data-size="{channel.peer_size}">
+            <a href="/node/{channel.peer_id}">
+              {#if channel.peer_name} {channel.peer_name} {:else}
+              {abbr(channel.peer_id)} {/if}
+            </a>
+          </td>
+          <td>
+            <a href="/channel/{channel.short_channel_id}">
+              {channel.short_channel_id}
+            </a>
+          </td>
+          <td>
+            {channel.satoshis}
+            <i
+              class="bar"
+              style="width:{(100 * (channel.satoshis / maxcap)).toFixed(2)}%; background: var(--gold)"
+            />
+          </td>
+          <td
+            title="{(100 * (channel.open_fee + channel.close_fee) / channel.satoshis).toFixed(2)}% of total value"
+          >
+            {channel.open_fee} {#if channel.close_block > 0} +
+            {channel.close_fee} = {channel.open_fee + channel.close_fee} {/if}
+
+            <i
+              class="bar"
+              style="width:{(100 * (channel.open_fee + channel.close_fee) / maxfee).toFixed(2)}%; background: var(--gold)"
+            />
+          </td>
+          <td>{channel.open_block}</td>
+          <td>{#if channel.close_block > 0} {channel.close_block} {/if}</td>
+          {#if channel.close_block > 0}
+          <td>
+            {#if channel.close_type}closed as
+            <strong>{channel.close_type}</strong>{/if} {#if
+            channel.close_htlc_count > 0}with {channel.close_htlc_count}
+            HTLC{#if channel.close_htlc_count != 1}s{/if} {/if}
+          </td>
+          {:else}
+          <td class:hidden="{direction !== 'outgoing'}">
+            {channel.outgoing_fee_per_millionth / 10000}% (min
+            {(channel.outgoing_base_fee_millisatoshi / 1000).toFixed(3)} sat);
+            delay of {channel.outgoing_delay}
+          </td>
+          <td class:hidden="{direction !== 'incoming'}">
+            {channel.incoming_fee_per_millionth / 10000}% (min
+            {(channel.incoming_base_fee_millisatoshi / 1000).toFixed(3)} sat);
+            delay of {channel.incoming_delay}
+          </td>
+          {/if}
         </tr>
         {/each}
       </tbody>
     </table>
   </div>
   {/if}
-
-  <div>
-    <table>
-      <tbody>
-        <tr>
-          <th>open channels</th>
-          <td>{node.openchannels}</td>
-        </tr>
-        <tr>
-          <th>closed channels</th>
-          <td>{node.closedchannels}</td>
-        </tr>
-        <tr>
-          <th>avg channel duration</th>
-          <td>{node.avg_duration}</td>
-        </tr>
-        <tr>
-          <th>avg opening fee</th>
-          <td>{node.avg_open_fee}</td>
-        </tr>
-        <tr>
-          <th>avg closing fee</th>
-          <td>{node.avg_close_fee}</td>
-        </tr>
-        <tr>
-          <th>capacity</th>
-          <td>{node.capacity}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<NodeHistory channels="{channels}" />
-<Bubbles channels="{channels}" />
-<div>
-  <h4>all channels</h4>
-  <table id="channels-table">
-    <thead>
-      <tr>
-        <th>with</th>
-        <th>id</th>
-        <th>total satoshis</th>
-        <th>chain fee</th>
-        <th>open</th>
-        <th>close</th>
-        <th>
-          {#if direction == "outgoing"} ↗ {:else} ↙ {/if}
-          <span class="toggle" on:click="{toggleDirection}">
-            {direction}
-          </span>
-          fee policy
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each channels as channel}
-      <tr
-        id="ch-{channel.short_channel_id}"
-        class:closed="{channel.close_block > 0}"
-      >
-        <td data-size="{channel.peer_size}">
-          <a href="/node/{channel.peer_id}">
-            {#if channel.peer_name} {channel.peer_name} {:else}
-            {abbr(channel.peer_id)} {/if}
-          </a>
-        </td>
-        <td>
-          <a href="/channel/{channel.short_channel_id}">
-            {channel.short_channel_id}
-          </a>
-        </td>
-        <td>
-          {channel.satoshis}
-          <i
-            class="bar"
-            style="width:{(100 * (channel.satoshis / maxcap)).toFixed(2)}%; background: var(--gold)"
-          />
-        </td>
-        <td
-          title="{(100 * (channel.open_fee + channel.close_fee) / channel.satoshis).toFixed(2)}% of total value"
-        >
-          {channel.open_fee} {#if channel.close_block > 0} + {channel.close_fee}
-          = {channel.open_fee + channel.close_fee} {/if}
-
-          <i
-            class="bar"
-            style="width:{(100 * (channel.open_fee + channel.close_fee) / maxfee).toFixed(2)}%; background: var(--gold)"
-          />
-        </td>
-        <td>{channel.open_block}</td>
-        <td>{#if channel.close_block > 0} {channel.close_block} {/if}</td>
-        {#if channel.close_block > 0}
-        <td>
-          {#if channel.close_type}closed as
-          <strong>{channel.close_type}</strong>{/if} {#if
-          channel.close_htlc_count > 0}with {channel.close_htlc_count} HTLC{#if
-          channel.close_htlc_count != 1}s{/if} {/if}
-        </td>
-        {:else}
-        <td class:hidden="{direction !== 'outgoing'}">
-          {channel.outgoing_fee_per_millionth / 10000}% (min
-          {(channel.outgoing_base_fee_millisatoshi / 1000).toFixed(3)} sat);
-          delay of {channel.outgoing_delay}
-        </td>
-        <td class:hidden="{direction !== 'incoming'}">
-          {channel.incoming_fee_per_millionth / 10000}% (min
-          {(channel.incoming_base_fee_millisatoshi / 1000).toFixed(3)} sat);
-          delay of {channel.incoming_delay}
-        </td>
-        {/if}
-      </tr>
-      {/each}
-    </tbody>
-  </table>
 </div>
 {/if}
