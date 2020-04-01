@@ -202,7 +202,9 @@
         </a>
       </td>
       <td>
-        <a href="https://blockstream.info/tx/{channel.open_transaction}">
+        <a
+          href="https://blockstream.info/tx/{channel.open_transaction}?output:{channel.short_channel_id.split('x')[2]"
+        >
           {channel.open_transaction}
         </a>
       </td>
