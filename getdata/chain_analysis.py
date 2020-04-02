@@ -65,14 +65,6 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
         # will decide what to do later
         return
 
-    # in case of penalty first we set 'a' and 'b' to the same
-    if (
-        data1["close"].get("type") == "penalty"
-        or data2["close"].get("type") == "penalty"
-    ):
-        # will decide what to do later
-        return
-
     # match nodes sharing outputs after channel closes
     if match_summary != {"funding"} and (
         data1["a"],
@@ -85,26 +77,18 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
             common = set(nodes1).intersection(set(nodes2)).pop()
             data1["a"] = nodes1.index(common)
             data2["a"] = nodes2.index(common)
-            data1["b"] = 1 - data1["a"]
-            data2["b"] = 1 - data2["a"]
         if m.matches("b", "b"):
             common = set(nodes1).intersection(set(nodes2)).pop()
             data1["b"] = nodes1.index(common)
             data2["b"] = nodes2.index(common)
-            data1["a"] = 1 - data1["b"]
-            data2["a"] = 1 - data2["b"]
         if m.matches("a", "b"):
             common = set(nodes1).intersection(set(nodes2)).pop()
             data1["a"] = nodes1.index(common)
             data2["b"] = nodes2.index(common)
-            data1["b"] = 1 - data1["a"]
-            data2["a"] = 1 - data2["b"]
         if m.matches("b", "a"):
             common = set(nodes1).intersection(set(nodes2)).pop()
             data1["b"] = nodes1.index(common)
             data2["a"] = nodes2.index(common)
-            data1["a"] = 1 - data1["b"]
-            data2["b"] = 1 - data2["a"]
 
     # match nodes sharing inputs with outputs across channels
     if "funding" in match_summary and len(match_summary) > 1:
@@ -113,27 +97,35 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
             if m.matches("a", "funding"):
                 common = set(nodes1).intersection(set(nodes2)).pop()
                 data1["a"] = nodes1.index(common)
-                data1["b"] = 1 - data1["a"]
                 data2["funder"] = nodes2.index(common)
             if m.matches("b", "funding"):
                 common = set(nodes1).intersection(set(nodes2)).pop()
                 data1["b"] = nodes1.index(common)
-                data1["a"] = 1 - data1["b"]
                 data2["funder"] = nodes2.index(common)
             if m.matches("funding", "a"):
                 common = set(nodes1).intersection(set(nodes2)).pop()
                 data2["a"] = nodes2.index(common)
-                data2["b"] = 1 - data2["a"]
                 data1["funder"] = nodes1.index(common)
             if m.matches("funding", "b"):
                 common = set(nodes1).intersection(set(nodes2)).pop()
                 data2["b"] = nodes2.index(common)
-                data2["a"] = 1 - data2["b"]
                 data1["funder"] = nodes1.index(common)
         except KeyError:
             # funding to two different nodes may come from the same transaction
             # since we're not tracking output number an error may happen here.
             pass
+
+    # in any case we discovered either 'a' or 'b' for any peer, we now also
+    # know 'b' or 'a' for them
+    for data in [data1, data2]:
+        for x, y in [("a", "b"), ("b", "a")]:
+            if data[x]:
+                if data["close"]["type"] == "penalty":
+                    # it's the same
+                    data[y] = data[x]
+                else:
+                    # it's the reverse
+                    data[y] = 1 - data[x]
 
     # if we know the funder of two channels is the same we know who it is
     if m.matches("funding", "funding"):
@@ -151,14 +143,19 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
     # funder here will be set to either 0 or 1
     if "funding" in match_summary and len(match_summary) > 2:
         updated = True
-        if m.matches("funding", "a") and data1["a"]:
-            data1["funder"] = nodes1.index(nodes2[data2["a"]])
-        if m.matches("funding", "b") and data1["b"]:
-            data1["funder"] = nodes1.index(nodes2[data2["b"]])
-        if m.matches("a", "funding",) and data2["a"]:
-            data2["funder"] = nodes2.index(nodes1[data1["a"]])
-        if m.matches("b", "funding",) and data2["b"]:
-            data2["funder"] = nodes2.index(nodes1[data1["b"]])
+        try:
+            if m.matches("funding", "a") and data1["a"]:
+                data1["funder"] = nodes1.index(nodes2[data2["a"]])
+            if m.matches("funding", "b") and data1["b"]:
+                data1["funder"] = nodes1.index(nodes2[data2["b"]])
+            if m.matches("a", "funding",) and data2["a"]:
+                data2["funder"] = nodes2.index(nodes1[data1["a"]])
+            if m.matches("b", "funding",) and data2["b"]:
+                data2["funder"] = nodes2.index(nodes1[data1["b"]])
+        except ValueError:
+            # funding to two different nodes may come from the same transaction
+            # since we're not tracking output number an error may happen here.
+            pass
 
     # if the channel only has one close balance we automatically know things
     for data in [data1, data2]:
@@ -209,6 +206,15 @@ class Matcher:
                 "funding": set(data2["txs"]["funding"]),
             },
         }
+
+        # in case of penalty we know 'a' and 'b' are the same
+        # so mix their output transactions so we can get more matches
+        if data1["close"]["type"] == "penalty":
+            self.txs[1]["a"].update(self.txs[1]["b"])
+            self.txs[1]["b"].update(self.txs[1]["a"])
+        if data2["close"]["type"] == "penalty":
+            self.txs[2]["a"].update(self.txs[2]["b"])
+            self.txs[2]["b"].update(self.txs[2]["a"])
 
     def matches(self, tag1, tag2):
         return self.txs[1][tag1].intersection(self.txs[2][tag2])
