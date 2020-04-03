@@ -36,7 +36,18 @@
       } else if (location.pathname.slice(0, 10) === '/channels/') {
         history.replace(location.pathname.replace('/channels/', '/channel/'))
       } else {
-        routedComponent = NotFound
+        let raw = location.pathname.replace(/\W/g, '')
+        if (raw.length >= 65 && raw.length <= 67) {
+          history.replace(`/node/${raw}`)
+        } else if (
+          raw.split('x').length === 3 &&
+          raw.length >= 10 &&
+          raw.length < 30
+        ) {
+          history.replace(`/channel/${raw}`)
+        } else {
+          routedComponent = NotFound
+        }
       }
     }, 0)
   }
