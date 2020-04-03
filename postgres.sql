@@ -52,6 +52,14 @@ CREATE TABLE IF NOT EXISTS nodealiases (
 CREATE INDEX IF NOT EXISTS index_pubkey ON nodealiases(pubkey);
 GRANT SELECT ON nodealiases TO web_anon;
 
+CREATE TABLE IF NOT EXISTS features (
+  pubkey text NOT NULL,
+  features text NOT NULL,
+  first_seen timestamp NOT NULL,
+  last_seen timestamp NOT NULL
+);
+GRANT SELECT ON features TO web_anon;
+
 CREATE TABLE IF NOT EXISTS policies (
   short_channel_id text NOT NULL,
   direction integer NOT NULL, -- 1 means from node0 to node1 and vice-versa
