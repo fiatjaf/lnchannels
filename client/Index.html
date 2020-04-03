@@ -2,7 +2,7 @@
 
 <script>
   import {onMount, getContext} from 'svelte'
-  import NodeAlias from './NodeAlias.html'
+  import Alias from './Alias.html'
 
   import {abbr, plotOptions} from './helpers'
   import * as d3 from './d3'
@@ -155,7 +155,7 @@
             <strong>penalty</strong> that has taken
             <strong>{chan.onchain.close.balance[chan.onchain.taken]}</strong>
             sat{#if chan.onchain[chan.onchain.taken]} from
-            <NodeAlias pubkey="{chan.nodes[chan.onchain.taken]}" link />{/if}.
+            <Alias pubkey="{chan.nodes[chan.onchain.taken]}" link />{/if}.
           </span>
           {:else if chan.onchain.close.type == 'force'}
           <span>
@@ -171,7 +171,7 @@
             {/if}
             <strong>force-closed</strong>{#if chan.onchain.closer &&
             chan.onchain.a}&nbsp; by
-            <NodeAlias
+            <Alias
               pubkey="{chan.nodes[chan.onchain[chan.onchain.closer]]}"
               link
             />{/if}{#if chan.onchain.close.htlcs.a.length +
@@ -218,10 +218,10 @@
         </td>
         <td>{chan.onchain.open.block}</td>
         <td>
-          <NodeAlias pubkey="{chan.nodes[0]}" link />
+          <Alias pubkey="{chan.nodes[0]}" link />
         </td>
         <td>
-          <NodeAlias pubkey="{chan.nodes[1]}" link />
+          <Alias pubkey="{chan.nodes[1]}" link />
         </td>
         <td>
           {stats.last_block - chan.onchain.open.block}

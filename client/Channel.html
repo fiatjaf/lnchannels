@@ -4,7 +4,7 @@
   import {onMount, getContext} from 'svelte'
   import {abbr, date} from './helpers'
   import NotFound from './NotFound.html'
-  import NodeAlias from './NodeAlias.html'
+  import Alias from './Alias.html'
 
   var notfound = false
   var channel = {
@@ -111,7 +111,7 @@
     <tr>
       <th>funder</th>
       <td>
-        <NodeAlias pubkey="{channel.nodes[channel.onchain.funder]}" />
+        <Alias pubkey="{channel.nodes[channel.onchain.funder]}" />
       </td>
     </tr>
 
@@ -122,10 +122,10 @@
         <table>
           <tr>
             <td>
-              <NodeAlias pubkey="{channel.nodes[0]}" />
+              <Alias pubkey="{channel.nodes[0]}" />
             </td>
             <td>
-              <NodeAlias pubkey="{channel.nodes[1]}" />
+              <Alias pubkey="{channel.nodes[1]}" />
             </td>
           </tr>
           <tr>
@@ -179,7 +179,7 @@
     <tr>
       <th>force closer</th>
       <td>
-        <NodeAlias
+        <Alias
           pubkey="{channel.nodes[channel.onchain[channel.onchain.closer]]}"
         />
       </td>
@@ -215,7 +215,7 @@
       <caption>
         from
         <code>
-          <NodeAlias pubkey="{channel.nodes[0]}" />
+          <Alias pubkey="{channel.nodes[0]}" />
         </code>
       </caption>
       <thead>
@@ -242,7 +242,7 @@
       <caption>
         from
         <code>
-          <NodeAlias pubkey="{channel.nodes[1]}" />
+          <Alias pubkey="{channel.nodes[1]}" />
         </code>
       </caption>
       <thead>
