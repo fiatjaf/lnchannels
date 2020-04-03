@@ -120,7 +120,7 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
     for data in [data1, data2]:
         for x, y in [("a", "b"), ("b", "a")]:
             if data[x]:
-                if data["close"]["type"] == "penalty":
+                if data["close"].get("type") == "penalty":
                     # it's the same
                     data[y] = data[x]
                 else:
@@ -206,15 +206,6 @@ class Matcher:
                 "funding": set(data2["txs"]["funding"]),
             },
         }
-
-        # in case of penalty we know 'a' and 'b' are the same
-        # so mix their output transactions so we can get more matches
-        if data1["close"]["type"] == "penalty":
-            self.txs[1]["a"].update(self.txs[1]["b"])
-            self.txs[1]["b"].update(self.txs[1]["a"])
-        if data2["close"]["type"] == "penalty":
-            self.txs[2]["a"].update(self.txs[2]["b"])
-            self.txs[2]["b"].update(self.txs[2]["a"])
 
     def matches(self, tag1, tag2):
         return self.txs[1][tag1].intersection(self.txs[2][tag2])

@@ -195,8 +195,12 @@ def onclose(data):
                         # but we'll know later they're the same node.
                         # we can't ever know who was the "closer" here
                         # as both 'a' and 'b' outputs will go to the same peer.
+
+                        # however we do mark the side that was appropriated
+                        data["taken"] = side
                     else:
                         kinds.add("delayed")
+
                         # in case of a delayed output, we know this was the force-closer
                         data["closer"] = side
                 else:

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS channels (
     "b": null,
     "funder": null,
     "closer": null,
+    "taken": null,
     "open": {
       "block": null,
       "txid": null,
