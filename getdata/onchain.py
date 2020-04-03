@@ -112,7 +112,7 @@ def isclosed(scid, data):
     chan_vout = int(scid.split("x")[2])
     spends = get_outspends(data["open"]["txid"])
     chan_spend = spends[chan_vout]
-    if not chan_spend["spent"]:
+    if not chan_spend["spent"] or "block_height" not in chan_spend["status"]:
         raise ChannelStillOpen
 
     close_txid = chan_spend["txid"]
@@ -192,17 +192,13 @@ def onclose(data):
                     if witness[-2] == "01":
                         kinds.add("penalty")
                         # we keep treating this as if 'a' and 'b' were different
-                        # but we'll know they're the same node
-
+                        # but we'll know later they're the same node.
+                        # we can't ever know who was the "closer" here
+                        # as both 'a' and 'b' outputs will go to the same peer.
                     else:
                         kinds.add("delayed")
-
                         # in case of a delayed output, we know this was the force-closer
                         data["closer"] = side
-
-                        for next_spend in get_outspends(spend["txid"]):
-                            if next_spend["spent"]:
-                                txs[side].add(next_spend["txid"])
                 else:
                     # paying to a custom address, means the same as a pubkey
                     # (it's anything the peer wants to spend to either in a
