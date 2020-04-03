@@ -16,6 +16,34 @@
   var downwardpolicies = []
   var stats = {}
 
+  $: htlcs = channel.onchain.close.htlcs
+    ? channel.onchain.close.htlcs.a
+        .map(htlc => ({...htlc, owner: 'a'}))
+        .concat(
+          channel.onchain.close.htlcs.b.map(htlc => ({...htlc, owner: 'b'}))
+        )
+        .map((htlc, i) => {
+          if (channel.onchain.a) {
+            htlc.owner = channel.names[channel.onchain[htlc.owner]]
+          } else if (channel.onchain.closer) {
+            htlc.owner =
+              htlc.owner === channel.onchain.closer
+                ? 'the one who closed'
+                : "the one who didn't close"
+          } else if (channel.onchain.close.htlcs.a.length) {
+            htlc.owner = htlc.owner === 'a' ? 'someone' : 'someone else'
+          } else {
+            htlc.owner = 'unknown'
+          }
+          return htlc
+        })
+    : []
+  $: closebalances = channel.onchain.a
+    ? channel.nodes
+        .map((_, idx) => (channel.onchain.a === idx ? 'a' : 'b'))
+        .map(letter => channel.onchain.close.balance[letter])
+    : null
+
   const id = getContext('history')
     .location.pathname.split('/')
     .slice(-1)[0]
@@ -33,8 +61,8 @@
     } else {
       channel = res[0]
       channel.names = channel.nodes.map(abbr)
-      fetchAlias(channel.nodes[0])
-      fetchAlias(channel.nodes[1])
+      fetchAlias(0)
+      fetchAlias(1)
     }
   })
 
@@ -53,7 +81,7 @@
       )
     ).json()
     if (res.length) {
-      channel.aliases[nodeidx] = res[0].alias
+      channel.names[nodeidx] = res[0].alias
     }
   }
 
@@ -101,6 +129,12 @@
       <th>satoshis</th>
       <td>{channel.satoshis}</td>
     </tr>
+    {#if channel.onchain.funder}
+    <tr>
+      <th>funder</th>
+      <td>{channel.names[channel.onchain.funder]}</td>
+    </tr>
+    {/if}
     <tr>
       <th>nodes</th>
       <td>
@@ -121,6 +155,16 @@
               <a href="/node/{channel.nodes[1]}">{abbr(channel.nodes[1])}</a>
             </td>
           </tr>
+          {#if closebalances}
+          <tr>
+            <td>
+              {closebalances[0]} sat
+            </td>
+            <td>
+              {closebalances[1]} sat
+            </td>
+          </tr>
+          {/if}
         </table>
       </td>
     </tr>
@@ -142,6 +186,40 @@
         {/if}
       </td>
     </tr>
+    {#if channel.onchain.close.type}
+    <tr>
+      <th>close type</th>
+      <td>
+        {channel.onchain.close.type} {#if channel.onchain.close.balance.b ==
+        0}(unused){/if}
+      </td>
+    </tr>
+    {/if} {#if channel.onchain.closer && channel.onchain.a}
+    <tr>
+      <th>force closer</th>
+      <td>{channel.names[channel.onchain[channel.onchain.closer]]}</td>
+    </tr>
+    {/if} {#if htlcs.length}
+    <tr>
+      <th>HTLCs</th>
+      <td>
+        <table>
+          <tr>
+            <th>offered to</th>
+            <th>sat</th>
+            <th>result</th>
+          </tr>
+          {#each htlcs as htlc}
+          <tr>
+            <td>{htlc.owner}</td>
+            <td>{htlc.amount}</td>
+            <td>{htlc.kind}</td>
+          </tr>
+          {/each}
+        </table>
+      </td>
+    </tr>
+    {/if}
   </table>
 
   {#if upwardpolicies.length || downwardpolicies.length}
@@ -249,20 +327,6 @@
         <a href="https://blockstream.info/tx/{channel.onchain.close.txid}">
           {channel.onchain.close.txid}
         </a>
-        {#if channel.onchain.close.type}
-        <div>close type: <strong>{channel.onchain.close.type}</strong></div>
-        {#if channel.onchain.close.htlcs.a.length +
-        channel.onchain.close.htlcs.b.length > 0}
-        <div>
-          outstanding HTLCs: {channel.channel.onchain.close.htlcs.a.length +
-          channel.onchain.close.htlcs.b.length}
-        </div>
-        {/if}
-        <div>
-          <em>{channel.onchain.close.balance.a} sat</em> ↹
-          <em>{channel.onchain.close.balance.b} sat</em>
-        </div>
-        {/if}
       </td>
       <td>{channel.onchain.close.fee} sat</td>
     </tr>
