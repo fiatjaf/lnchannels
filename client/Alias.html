@@ -40,7 +40,7 @@
 </script>
 
 {#if link}
-<a href="/nodes/{pubkey}">
+<a href="/node/{pubkey}">
   {#await namePromise}{pubkey}{:then name}{name}{:catch
   error}{abbr(pubkey)}{/await}
 </a>

@@ -72,15 +72,23 @@ CREATE TABLE IF NOT EXISTS policies (
 GRANT SELECT ON policies TO web_anon;
 
 CREATE MATERIALIZED VIEW nodes AS
-  WITH nodealias AS (
+  WITH pubkeys AS (
+    SELECT DISTINCT pubkey FROM (
+        SELECT nodes->>0 AS pubkey FROM channels
+      UNION ALL
+        SELECT nodes->>1 AS pubkey FROM channels
+    )x
+  ), nodealias AS (
     SELECT
       pubkey,
-      (SELECT alias FROM nodealiases AS n WHERE nodealiases.pubkey = n.pubkey ORDER BY last_seen DESC LIMIT 1) AS alias
-    FROM nodealiases
+      coalesce((SELECT alias FROM nodealiases AS n WHERE n.pubkey = p.pubkey ORDER BY last_seen DESC LIMIT 1), '') AS alias
+    FROM pubkeys AS p
     GROUP BY pubkey
   ), open AS (
     SELECT pubkey, count(*) AS openchannels, sum(satoshis) AS capacity FROM (
-      SELECT nodes->>0 AS pubkey, * FROM channels UNION ALL SELECT nodes->>1 AS pubkey, * FROM channels
+        SELECT nodes->>0 AS pubkey, * FROM channels
+      UNION ALL
+        SELECT nodes->>1 AS pubkey, * FROM channels
     )x WHERE onchain->'close'->>'block' IS NULL GROUP BY pubkey
   ), agg AS (
     SELECT pubkey,

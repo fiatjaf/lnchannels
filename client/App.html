@@ -31,6 +31,10 @@
         routedComponent = Channel
       } else if (location.pathname === '/docs') {
         routedComponent = API
+      } else if (location.pathname.slice(0, 7) === '/nodes/') {
+        history.replace(location.pathname.replace('/nodes/', '/node/'))
+      } else if (location.pathname.slice(0, 10) === '/channels/') {
+        history.replace(location.pathname.replace('/channels/', '/channel/'))
       } else {
         routedComponent = NotFound
       }
