@@ -245,7 +245,8 @@ $$ LANGUAGE SQL STABLE;
 CREATE OR REPLACE FUNCTION crash (c channels) RETURNS integer AS $$
   SELECT
     CASE
-      WHEN c.onchain->'close'->>'type' = 'penalty' THEN c.satoshis / 10000
+      WHEN c.onchain->'close'->>'type' = 'penalty' THEN
+        (c.onchain->'close'->'balance'->>(c.onchain->>'taken'))::int / 7000
       WHEN c.onchain->'close'->>'type' = 'force' THEN
         10
         + (jsonb_array_length(c.onchain->'close'->'htlcs'->'a')
@@ -257,72 +258,6 @@ CREATE OR REPLACE FUNCTION crash (c channels) RETURNS integer AS $$
           / ((c.onchain->'close'->>'block')::int - (c.onchain->'open'->>'block')::int))
       ELSE 0
     END
-$$ LANGUAGE SQL STABLE;
-
-CREATE OR REPLACE FUNCTION crashed_channels ()
-RETURNS TABLE (
-  short_channel_id text,
-  crash int,
-  satoshis int,
-  outstanding_htlcs int,
-  closer text,
-  closer_name text,
-  close_type text,
-  duration int
-) AS $$
-  SELECT
-    short_channel_id,
-    channels.crash,
-    satoshis,
-    jsonb_array_length(onchain->'close'->'htlcs'->'a') + jsonb_array_length(onchain->'close'->'htlcs'->'b'),
-    nodes->>(onchain->>(onchain->>'closer'))::int,
-    ( SELECT alias FROM nodes
-      WHERE pubkey = nodes->>(onchain->>(onchain->>'closer'))::int ),
-    onchain->'close'->>'type',
-    (onchain->'close'->>'block')::int - (onchain->'open'->>'block')::int
-  FROM channels
-  WHERE channels.crash IS NOT NULL
-  ORDER BY channels.crash DESC
-$$ LANGUAGE SQL STABLE;
-
-CREATE OR REPLACE FUNCTION longest_living_channels(last_block int)
-RETURNS TABLE (
-  short_channel_id text,
-  open_block int,
-  close_block int,
-  duration int,
-  closed bool,
-  id0 text,
-  name0 text,
-  id1 text,
-  name1 text,
-  satoshis int
-) AS $$
-  SELECT
-    short_channel_id,
-    open_block,
-    close_block,
-    close_block - open_block AS duration,
-    closed,
-    nodes->>0 AS id0,
-    coalesce((SELECT alias FROM nodes WHERE pubkey = nodes->>0), '') AS name0,
-    nodes->>1 AS id1,
-    coalesce((SELECT alias FROM nodes WHERE pubkey = nodes->>1), '') AS name1,
-    satoshis
-  FROM (
-    SELECT short_channel_id,
-      (onchain->'open'->>'block')::int AS open_block,
-      CASE WHEN onchain->'close'->>'block' IS NOT NULL
-        THEN (onchain->'close'->>'block')::int
-        ELSE last_block
-      END AS close_block,
-      (onchain->'close'->>'block' IS NOT NULL) AS closed,
-      nodes,
-      satoshis
-    FROM channels
-    WHERE onchain->'open'->>'block' IS NOT NULL
-  )x
-  ORDER BY duration DESC
 $$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION node_channels (nodepubkey text)

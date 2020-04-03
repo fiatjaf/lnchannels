@@ -1,0 +1,52 @@
+<!-- @format -->
+
+<script>
+  import {onMount, setContext, getContext} from 'svelte'
+  import {abbr} from './helpers'
+
+  export let pubkey
+  export let link
+
+  let namePromises = getContext('name-promises') || {}
+
+  var namePromise
+
+  onMount(() => {
+    if (pubkey in namePromises) {
+      namePromise = namePromises[pubkey]
+    } else {
+      namePromise = fetch(
+        `/api/nodealiases?pubkey=eq.${pubkey}&select=alias&order=last_seen.desc`,
+        {
+          headers: {
+            'Range-Unit': 'items',
+            Range: '0-1'
+          }
+        }
+      )
+        .then(r => r.json())
+        .then(res => {
+          if (res.length && res[0].alias != '') {
+            return res[0].alias
+          }
+
+          throw new Error('not found, someone please catch this')
+        })
+
+      namePromises[pubkey] = namePromise
+      setContext('name-promises', namePromises)
+    }
+  })
+</script>
+
+{#if link}
+<a href="/nodes/{pubkey}">
+  {#await namePromise}{pubkey}{:then name}{name}{:catch
+  error}{abbr(pubkey)}{/await}
+</a>
+{:else}
+<span>
+  {#await namePromise}{pubkey}{:then name}{name}{:catch
+  error}{abbr(pubkey)}{/await}
+</span>
+{/if}

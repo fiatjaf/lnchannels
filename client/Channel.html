@@ -4,12 +4,12 @@
   import {onMount, getContext} from 'svelte'
   import {abbr, date} from './helpers'
   import NotFound from './NotFound.html'
+  import NodeAlias from './NodeAlias.html'
 
   var notfound = false
   var channel = {
     short_channel_id: 'loading',
     nodes: ['', ''],
-    names: ['', ''],
     onchain: {open: {}, close: {}}
   }
   var upwardpolicies = []
@@ -24,7 +24,7 @@
         )
         .map((htlc, i) => {
           if (channel.onchain.a) {
-            htlc.owner = channel.names[channel.onchain[htlc.owner]]
+            htlc.owner = channel.nodes[channel.onchain[htlc.owner]]
           } else if (channel.onchain.closer) {
             htlc.owner =
               htlc.owner === channel.onchain.closer
@@ -60,30 +60,8 @@
       notfound = true
     } else {
       channel = res[0]
-      channel.names = channel.nodes.map(abbr)
-      fetchAlias(0)
-      fetchAlias(1)
     }
   })
-
-  async function fetchAlias(nodeidx) {
-    let pubkey = channel.nodes[nodeidx]
-
-    let res = await (
-      await fetch(
-        `/api/nodealiases?pubkey=eq.${pubkey}&select=alias&order=last_seen.desc`,
-        {
-          headers: {
-            'Range-Unit': 'items',
-            Range: '0-1'
-          }
-        }
-      )
-    ).json()
-    if (res.length) {
-      channel.names[nodeidx] = res[0].alias
-    }
-  }
 
   onMount(async () => {
     let policies = await (
@@ -103,7 +81,7 @@
   <title>channel {channel.short_channel_id}</title>
   <meta
     name="description"
-    content="Information about the Lightning Network channel {channel.short_channel_id} between {channel.names[0]} and {channel.names[1]}"
+    content="Information about the Lightning Network channel {channel.short_channel_id} between {channel.nodes[0]} and {channel.nodes[1]}"
   />
 </svelte:head>
 
@@ -132,8 +110,11 @@
     {#if channel.onchain.funder}
     <tr>
       <th>funder</th>
-      <td>{channel.names[channel.onchain.funder]}</td>
+      <td>
+        <NodeAlias pubkey="{channel.nodes[channel.onchain.funder]}" />
+      </td>
     </tr>
+
     {/if}
     <tr>
       <th>nodes</th>
@@ -141,10 +122,10 @@
         <table>
           <tr>
             <td>
-              {channel.names[0]}
+              <NodeAlias pubkey="{channel.nodes[0]}" />
             </td>
             <td>
-              {channel.names[1]}
+              <NodeAlias pubkey="{channel.nodes[1]}" />
             </td>
           </tr>
           <tr>
@@ -197,7 +178,11 @@
     {/if} {#if channel.onchain.closer && channel.onchain.a}
     <tr>
       <th>force closer</th>
-      <td>{channel.names[channel.onchain[channel.onchain.closer]]}</td>
+      <td>
+        <NodeAlias
+          pubkey="{channel.nodes[channel.onchain[channel.onchain.closer]]}"
+        />
+      </td>
     </tr>
     {/if} {#if htlcs.length}
     <tr>
@@ -230,7 +215,7 @@
       <caption>
         from
         <code>
-          {channel.names[0]}
+          <NodeAlias pubkey="{channel.nodes[0]}" />
         </code>
       </caption>
       <thead>
@@ -257,7 +242,7 @@
       <caption>
         from
         <code>
-          {channel.names[1]}
+          <NodeAlias pubkey="{channel.nodes[1]}" />
         </code>
       </caption>
       <thead>

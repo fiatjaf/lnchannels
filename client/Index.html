@@ -2,6 +2,7 @@
 
 <script>
   import {onMount, getContext} from 'svelte'
+  import NodeAlias from './NodeAlias.html'
 
   import {abbr, plotOptions} from './helpers'
   import * as d3 from './d3'
@@ -17,14 +18,13 @@
   var stats = {}
 
   onMount(async () => {
-    stats = await getContext('stats')
     longestliving = await (
       await fetch(
-        `/api/rpc/longest_living_channels?last_block=${stats.last_block}`,
+        `/api/channels?onchain->close->>block=not.is.NULL&order=onchain->open->>block.asc`,
         {
           headers: {
             'Range-Unit': 'item',
-            Range: '0-19'
+            Range: '0-9'
           }
         }
       )
@@ -48,12 +48,15 @@
 
   onMount(async () => {
     crashed = await (
-      await fetch(`/api/rpc/crashed_channels`, {
-        headers: {
-          'Range-Unit': 'items',
-          Range: '0-29'
+      await fetch(
+        `/api/channels?select=crash,short_channel_id,nodes,onchain,satoshis&crash=gt.0&order=crash.desc`,
+        {
+          headers: {
+            'Range-Unit': 'items',
+            Range: '0-19'
+          }
         }
-      })
+      )
     ).json()
   })
 
@@ -133,10 +136,7 @@
       <tr>
         <th>short_channel_id</th>
         <th>satoshis</th>
-        <th>close type</th>
-        <th>HTLCs</th>
-        <th>duration (blocks)</th>
-        <th>unfortunate closer</th>
+        <th>circumstance</th>
       </tr>
     </thead>
     <tbody>
@@ -148,18 +148,41 @@
         <td>
           {chan.satoshis}
         </td>
-        <td>{chan.close_type}</td>
-        <td>{chan.outstanding_htlcs}</td>
         <td>
-          {chan.duration}
-        </td>
-        <td>
-          {#if chan.closer}
-          <a href="/node/{chan.closer}"
-            >{#if
-            chan.closer_name}{chan.closer_name}{:else}{abbr(chan.closer)}{/if}</a
-          >
-          {:else} unknown {/if}
+          {#if chan.onchain.close.type == 'penalty'}
+          <span>
+            closed with a
+            <strong>penalty</strong> that has taken
+            <strong>{chan.onchain.close.balance[chan.onchain.taken]}</strong>
+            sat{#if chan.onchain[chan.onchain.taken]} from
+            <NodeAlias pubkey="{chan.nodes[chan.onchain.taken]}" link />{/if}.
+          </span>
+          {:else if chan.onchain.close.type == 'force'}
+          <span>
+            {#if chan.onchain.close.htlcs.a.length +
+            chan.onchain.close.htlcs.b.length == 0}
+            <span>
+              lived for
+              <strong
+                >{chan.onchain.close.block - chan.onchain.open.block}</strong
+              >
+              blocks and was suddenly
+            </span>
+            {/if}
+            <strong>force-closed</strong>{#if chan.onchain.closer &&
+            chan.onchain.a}&nbsp; by
+            <NodeAlias
+              pubkey="{chan.nodes[chan.onchain[chan.onchain.closer]]}"
+              link
+            />{/if}{#if chan.onchain.close.htlcs.a.length +
+            chan.onchain.close.htlcs.b.length > 0}&nbsp; leaving
+            <strong
+              >{chan.onchain.close.htlcs.a.length +
+              chan.onchain.close.htlcs.b.length}</strong
+            >
+            HTLCs to be resolved{/if}.
+          </span>
+          {/if}
         </td>
       </tr>
       {/each}
@@ -182,7 +205,7 @@
     </thead>
     <tbody>
       {#each longestliving as chan}
-      <tr class:closed="{chan.closed}">
+      <tr>
         <td>
           <a href="/channel/{chan.short_channel_id}">{chan.short_channel_id}</a>
         </td>
@@ -193,19 +216,15 @@
             style="width:{100 * chan.satoshis / stats.max_channel_satoshis}%; background: var(--gold)"
           />
         </td>
-        <td>{chan.open_block}</td>
+        <td>{chan.onchain.open.block}</td>
         <td>
-          <a href="/node/{chan.id0}"
-            >{#if chan.name0}{chan.name0}{:else}{abbr(chan.id0)}{/if}</a
-          >
+          <NodeAlias pubkey="{chan.nodes[0]}" link />
         </td>
         <td>
-          <a href="/node/{chan.id1}"
-            >{#if chan.name1}{chan.name1}{:else}{abbr(chan.id1)}{/if}</a
-          >
+          <NodeAlias pubkey="{chan.nodes[1]}" link />
         </td>
         <td>
-          {chan.duration}
+          {stats.last_block - chan.onchain.open.block}
           <i
             class="bar"
             style="width:{100 * chan.duration / stats.max_channel_duration}%; background: var(--gold)"
