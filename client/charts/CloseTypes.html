@@ -1,7 +1,7 @@
 <!-- @format -->
 
 <script>
-  import {onMount, onDestroy, getContext} from 'svelte'
+  import {onMount, getContext} from 'svelte'
   import {plotOptions} from '../helpers'
 
   const first_block = getContext('first_block')
@@ -98,10 +98,10 @@
     }
 
     buildChart()
-  })
 
-  onDestroy(() => {
-    chart.destroy()
+    return () => {
+      chart.destroy()
+    }
   })
 </script>
 

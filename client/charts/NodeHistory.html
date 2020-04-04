@@ -1,7 +1,7 @@
 <!-- @format -->
 
 <script>
-  import {onMount, onDestroy, getContext} from 'svelte'
+  import {onMount, getContext} from 'svelte'
   import {plotOptions} from '../helpers'
 
   export let channels
@@ -115,10 +115,10 @@
       ],
       plotOptions
     })
-  })
 
-  onDestroy(() => {
-    chart.destroy()
+    return () => {
+      chart.destroy()
+    }
   })
 </script>
 
