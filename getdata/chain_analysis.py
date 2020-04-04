@@ -66,12 +66,7 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
         return
 
     # match nodes sharing outputs after channel closes
-    if match_summary != {"funding"} and (
-        data1["a"],
-        data2["a"],
-        data1["b"],
-        data2["b"],
-    ) != (None, None, None, None):
+    if match_summary != {"funding"} and None in {data1["a"], data2["a"]}:
         updated = True
         if m.matches("a", "a"):
             common = set(nodes1).intersection(set(nodes2)).pop()
@@ -91,7 +86,11 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
             data2["a"] = nodes2.index(common)
 
     # match nodes sharing inputs with outputs across channels
-    if "funding" in match_summary and len(match_summary) > 1:
+    if (
+        "funding" in match_summary
+        and len(match_summary) > 1
+        and None in {data1["a"], data2["a"], data1["funder"], data2["funder"]}
+    ):
         updated = True
         try:
             if m.matches("a", "funding"):
@@ -128,7 +127,7 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
                     data[y] = 1 - data[x]
 
     # if we know the funder of two channels is the same we know who it is
-    if m.matches("funding", "funding"):
+    if m.matches("funding", "funding") and None in {data1["funder"], data2["funder"]}:
         try:
             funder_id = set(nodes1).intersection(set(nodes2)).pop()
             data1["funder"] = nodes1.index(funder_id)
@@ -139,27 +138,9 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
             # since we're not tracking output number an error may happen here.
             pass
 
-    # match the channel funder with known nodes1
-    # funder here will be set to either 0 or 1
-    if "funding" in match_summary and len(match_summary) > 2:
-        updated = True
-        try:
-            if m.matches("funding", "a") and data1["a"]:
-                data1["funder"] = nodes1.index(nodes2[data2["a"]])
-            if m.matches("funding", "b") and data1["b"]:
-                data1["funder"] = nodes1.index(nodes2[data2["b"]])
-            if m.matches("a", "funding",) and data2["a"]:
-                data2["funder"] = nodes2.index(nodes1[data1["a"]])
-            if m.matches("b", "funding",) and data2["b"]:
-                data2["funder"] = nodes2.index(nodes1[data1["b"]])
-        except ValueError:
-            # funding to two different nodes may come from the same transaction
-            # since we're not tracking output number an error may happen here.
-            pass
-
     # if the channel only has one close balance we automatically know things
     for data in [data1, data2]:
-        if data["close"]["balance"]["b"] == 0:
+        if data["close"]["balance"]["b"] == 0 and not data.get("closer"):
             updated = True
             # 'a' is the closer.
             data["closer"] = "a"
