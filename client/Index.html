@@ -154,8 +154,11 @@
             closed with a
             <strong>penalty</strong> that has taken
             <strong>{chan.onchain.close.balance[chan.onchain.taken]}</strong>
-            sat{#if chan.onchain[chan.onchain.taken]} from
-            <Alias pubkey="{chan.nodes[chan.onchain.taken]}" link />{/if}.
+            sat{#if chan.onchain.taken && chan.onchain.a}&nbsp;from
+            <Alias
+              pubkey="{chan.nodes[chan.onchain[chan.onchain.taken]]}"
+              link
+            />{/if}.
           </span>
           {:else if chan.onchain.close.type == 'force'}
           <span>
@@ -175,7 +178,7 @@
               pubkey="{chan.nodes[chan.onchain[chan.onchain.closer]]}"
               link
             />{/if}{#if chan.onchain.close.htlcs.a.length +
-            chan.onchain.close.htlcs.b.length > 0}&nbsp; leaving
+            chan.onchain.close.htlcs.b.length > 0}&nbsp;leaving
             <strong
               >{chan.onchain.close.htlcs.a.length +
               chan.onchain.close.htlcs.b.length}</strong

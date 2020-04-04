@@ -1,42 +1,41 @@
 <!-- @format -->
 
 <script>
-  import {onMount, setContext, getContext} from 'svelte'
   import {abbr} from './helpers'
 
   export let pubkey
-  export let link
+  export let link = false
 
-  let namePromises = getContext('name-promises') || {}
+  var namePromise = Promise.resolve(pubkey)
 
-  var namePromise
-
-  onMount(() => {
-    if (pubkey in namePromises) {
-      namePromise = namePromises[pubkey]
+  $: if (pubkey !== '') {
+    if (pubkey in window.namePromises) {
+      namePromise = window.namePromises[pubkey]
     } else {
-      namePromise = fetch(
-        `/api/nodealiases?pubkey=eq.${pubkey}&select=alias&order=last_seen.desc`,
-        {
-          headers: {
-            'Range-Unit': 'items',
-            Range: '0-1'
-          }
+      namePromise = new Promise(async (resolve, reject) => {
+        let res = await (
+          await fetch(
+            `/api/nodealiases?pubkey=eq.${pubkey}&select=alias&order=last_seen.desc`,
+            {
+              headers: {
+                'Range-Unit': 'items',
+                Range: '0-1'
+              }
+            }
+          )
+        ).json()
+
+        if (res.length && res[0].alias != '') {
+          resolve(res[0].alias)
+          return
         }
-      )
-        .then(r => r.json())
-        .then(res => {
-          if (res.length && res[0].alias != '') {
-            return res[0].alias
-          }
 
-          throw new Error('not found, someone please catch this')
-        })
+        reject('not found, someone please catch this')
+      })
 
-      namePromises[pubkey] = namePromise
-      setContext('name-promises', namePromises)
+      window.namePromises[pubkey] = namePromise
     }
-  })
+  }
 </script>
 
 {#if link}
