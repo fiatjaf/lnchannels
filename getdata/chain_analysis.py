@@ -37,6 +37,7 @@ SELECT * FROM (
   GROUP BY tx
 )y
 WHERE c > 1 AND has_mistery
+ORDER BY random()
     """
     )
     for _, _, match, channels, _ in db.fetchall():
@@ -68,22 +69,27 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
     # match nodes sharing outputs after channel closes
     if match_summary != {"funding"} and None in {data1["a"], data2["a"]}:
         updated = True
-        if m.matches("a", "a"):
-            common = set(nodes1).intersection(set(nodes2)).pop()
-            data1["a"] = nodes1.index(common)
-            data2["a"] = nodes2.index(common)
-        if m.matches("b", "b"):
-            common = set(nodes1).intersection(set(nodes2)).pop()
-            data1["b"] = nodes1.index(common)
-            data2["b"] = nodes2.index(common)
-        if m.matches("a", "b"):
-            common = set(nodes1).intersection(set(nodes2)).pop()
-            data1["a"] = nodes1.index(common)
-            data2["b"] = nodes2.index(common)
-        if m.matches("b", "a"):
-            common = set(nodes1).intersection(set(nodes2)).pop()
-            data1["b"] = nodes1.index(common)
-            data2["a"] = nodes2.index(common)
+        try:
+            if m.matches("a", "a"):
+                common = set(nodes1).intersection(set(nodes2)).pop()
+                data1["a"] = nodes1.index(common)
+                data2["a"] = nodes2.index(common)
+            if m.matches("b", "b"):
+                common = set(nodes1).intersection(set(nodes2)).pop()
+                data1["b"] = nodes1.index(common)
+                data2["b"] = nodes2.index(common)
+            if m.matches("a", "b"):
+                common = set(nodes1).intersection(set(nodes2)).pop()
+                data1["a"] = nodes1.index(common)
+                data2["b"] = nodes2.index(common)
+            if m.matches("b", "a"):
+                common = set(nodes1).intersection(set(nodes2)).pop()
+                data1["b"] = nodes1.index(common)
+                data2["a"] = nodes2.index(common)
+        except KeyError:
+            # funding to two different nodes may come from the same transaction
+            # since we're not tracking output number an error may happen here.
+            pass
 
     # match nodes sharing inputs with outputs across channels
     if (
@@ -118,7 +124,8 @@ def chain_analysis_for(db, scid1, scid2, match_summary):
     # know 'b' or 'a' for them
     for data in [data1, data2]:
         for x, y in [("a", "b"), ("b", "a")]:
-            if data[x]:
+            if data[x] and not data[y]:
+                updated = True
                 if data["close"].get("type") == "penalty":
                     # it's the same
                     data[y] = data[x]

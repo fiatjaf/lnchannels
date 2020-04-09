@@ -1,24 +1,18 @@
 import json
-import random
 import requests
 
-from .globals import SPARK_URL, SPARK_TOKEN, bitcoin
+from .globals import SPARK_URL, SPARK_TOKEN
 
 
 def listchannels(db):
-    info = bitcoin.getblockchaininfo()
-    tip = info["blocks"]
-    since = tip - int(144 * 180 * random.random())
-
     r = requests.post(
         SPARK_URL, headers={"X-Access": SPARK_TOKEN}, json={"method": "listchannels"}
     )
     for ch in r.json()["channels"]:
-        if ch['public'] == False: continue
+        if ch["public"] == False:
+            continue
 
         block, *_ = ch["short_channel_id"].split("x")
-        if int(block) < since:
-            continue
 
         node0, node1, towards = (
             (ch["source"], ch["destination"], 1)
