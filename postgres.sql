@@ -268,6 +268,45 @@ CREATE OR REPLACE FUNCTION crash (c channels) RETURNS integer AS $$
     END
 $$ LANGUAGE SQL STABLE;
 
+-- assign the node a daemon name and version from the features string
+CREATE OR REPLACE FUNCTION daemon (f features) RETURNS text AS $$
+  WITH daemon (name, version, featureset) AS (
+    VALUES
+      ('c-lightning', '0.6', '88'),
+      ('c-lightning', '0.6.1', '8a'),
+      ('c-lightning', '0.6.2', '8a'),
+      ('c-lightning', '0.6.3', '88'),
+      ('c-lightning', '0.7.0', '8a'),
+      ('c-lightning', '0.7.1', 'aa'),
+      ('c-lightning', '0.7.2.1', 'aa'),
+      ('c-lightning', '0.7.3', '28a2'),
+      ('c-lightning', '0.8.0', '02aaa2'),
+      ('c-lightning', '0.8.1', '02aaa2'),
+      ('eclair', '0.3.1', '8a'),
+      ('eclair', '0.3.2', '0a8a'),
+      ('eclair', '0.3.3', '0a8a'),
+      ('eclair', '0.3.3-custom', '028a8a'),
+      ('eclair', 'acinq_node', '0a8a8a'),
+      ('eclair', 'guess', '0200'),
+      ('lnd', '0.4.1', '08'),
+      ('lnd', '0.4.2', '08'),
+      ('lnd', '0.5', '82'),
+      ('lnd', '0.5.2', '82'),
+      ('lnd', '0.6', '81'),
+      ('lnd', '0.6.1', '81'),
+      ('lnd', '0.7.1', '81'),
+      ('lnd', '0.8.0', '2281'),
+      ('lnd', '0.8.1', '2281'),
+      ('lnd', '0.8.2', '2281'),
+      ('lnd', '0.9.0', '02a2a1'),
+      ('lnd', '0.9.1', '02a2a1'),
+      ('lnd', '0.9.2', '02a2a1')
+      ('lnd', 'guess', '2200')
+  )
+  SELECT name FROM daemon
+  WHERE featureset = f.features;
+$$ LANGUAGE SQL STABLE;
+
 CREATE OR REPLACE FUNCTION node_channels (nodepubkey text)
 RETURNS TABLE (
   short_channel_id text,

@@ -1,199 +1,114 @@
-import json
-import itertools
+interval = 300
+global_start = 580000
+global_end = 631001
 
 
 def chain_analysis(db):
+    # prepare functions we're going to need
     db.execute(
         """
-SELECT * FROM (
-  SELECT
-    tx,
-    count(*) AS c,
-    array_agg(match) AS match,
-    array_agg(short_channel_id) AS channels,
-    bool_or(mistery) AS has_mistery
-  FROM (
-      SELECT
-        short_channel_id,
-        'a' AS match,
-        (onchain->>'a' IS NULL OR onchain->'open'->>'funder' IS NULL) AS mistery,
-        jsonb_array_elements_text(onchain->'txs'->'a') AS tx
-      FROM channels
-    UNION ALL
-      SELECT
-        short_channel_id,
-        'b' AS match,
-        (onchain->>'a' IS NULL OR onchain->'open'->>'funder' IS NULL) AS mistery,
-        jsonb_array_elements_text(onchain->'txs'->'b') AS tx
-      FROM channels
-    UNION ALL
-      SELECT
-        short_channel_id,
-        'funding' AS match,
-        (onchain->>'a' IS NULL OR onchain->'open'->>'funder' IS NULL) AS mistery,
-        jsonb_array_elements_text(onchain->'txs'->'funding') AS tx
-      FROM channels
-  )x
-  GROUP BY tx
-)y
-WHERE c > 1 AND has_mistery
-ORDER BY random()
+CREATE FUNCTION pg_temp.inter (x jsonb, y jsonb) RETURNS text AS $$
+  SELECT xr.value
+  FROM jsonb_array_elements_text(x) AS xr
+  INNER JOIN jsonb_array_elements_text(y) AS yr
+          ON xr.value = yr.value
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION pg_temp.diff (x jsonb, y jsonb) RETURNS text AS $$
+  SELECT (x - (SELECT array_agg(value) FROM jsonb_array_elements_text(y)))->>0
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION pg_temp.matches (x jsonb, y jsonb) RETURNS boolean AS $$
+  SELECT x ?| (SELECT array_agg(value) FROM jsonb_array_elements_text(y))
+$$ LANGUAGE SQL;
     """
     )
-    for _, _, match, channels, _ in db.fetchall():
-        for scid1, scid2 in itertools.combinations(channels, 2):
-            print("chain analysis:", scid1, scid2, " ", match)
-            chain_analysis_for(db, scid1, scid2, set(match))
-
-
-def chain_analysis_for(db, scid1, scid2, match_summary):
-    db.execute(
-        "SELECT onchain, nodes FROM channels WHERE short_channel_id = %s", (scid1,)
-    )
-    data1, nodes1 = db.fetchone()
 
     db.execute(
-        "SELECT onchain, nodes FROM channels WHERE short_channel_id = %s", (scid2,)
+        """
+SELECT short_channel_id
+FROM channels
+WHERE onchain->'close'->>'block' IS NOT NULL
+  AND (
+      onchain->>'a' IS NULL
+   OR onchain->>'funder' IS NULL
+  )
+ORDER BY short_channel_id
+    """
     )
-    data2, nodes2 = db.fetchone()
+    for (scid,) in db.fetchall():
+        run_for_channel(db, scid)
 
-    # matching helpers
-    updated = False
-    m = Matcher((nodes1, data1), (nodes2, data2))
 
-    # if the channels are between the same people we can't know anything, probably
-    if nodes1 == nodes2:
-        # will decide what to do later
-        return
+def run_for_channel(db, scid):
+    print("  running for", scid)
 
-    # match nodes sharing outputs after channel closes
-    if match_summary != {"funding"} and None in {data1["a"], data2["a"]}:
-        updated = True
-        try:
-            if m.matches("a", "a"):
-                common = set(nodes1).intersection(set(nodes2)).pop()
-                data1["a"] = nodes1.index(common)
-                data2["a"] = nodes2.index(common)
-            if m.matches("b", "b"):
-                common = set(nodes1).intersection(set(nodes2)).pop()
-                data1["b"] = nodes1.index(common)
-                data2["b"] = nodes2.index(common)
-            if m.matches("a", "b"):
-                common = set(nodes1).intersection(set(nodes2)).pop()
-                data1["a"] = nodes1.index(common)
-                data2["b"] = nodes2.index(common)
-            if m.matches("b", "a"):
-                common = set(nodes1).intersection(set(nodes2)).pop()
-                data1["b"] = nodes1.index(common)
-                data2["a"] = nodes2.index(common)
-        except KeyError:
-            # funding to two different nodes may come from the same transaction
-            # since we're not tracking output number an error may happen here.
-            pass
+    db.execute(
+        """
+WITH matching AS (
+  SELECT x.short_channel_id AS x_scid, x.nodes AS x_nodes, x.onchain AS x_onchain,
+         y.short_channel_id AS y_scid, y.nodes AS y_nodes, y.onchain AS y_onchain
+  FROM (SELECT * FROM channels WHERE short_channel_id = %s) AS x
+  INNER JOIN channels AS y
+     ON pg_temp.matches(x.nodes, y.nodes)
+    AND NOT x.nodes = y.nodes
+), partial_updates (scid, label, value, other) AS (
+    SELECT x_scid, 'a', pg_temp.inter(x_nodes, y_nodes), pg_temp.diff(x_nodes, y_nodes)
+    FROM matching
+    WHERE x_onchain->'close'->>'type' != 'penalty'
+      AND pg_temp.matches(x_onchain->'txs'->'a',
+            y_onchain->'txs'->'a' || y_onchain->'txs'->'b' || y_onchain->'txs'->'funding'
+          )
+  UNION
+    SELECT x_scid, 'a', pg_temp.inter(x_nodes, y_nodes), pg_temp.inter(x_nodes, y_nodes)
+    FROM matching
+    WHERE x_onchain->'close'->>'type' = 'penalty'
+      AND (
+          pg_temp.matches(x_onchain->'txs'->'a',
+            y_onchain->'txs'->'a' || y_onchain->'txs'->'b' || y_onchain->'txs'->'funding'
+          )
+       OR pg_temp.matches(x_onchain->'txs'->'a',
+            y_onchain->'txs'->'b' || y_onchain->'txs'->'b' || y_onchain->'txs'->'funding'
+          )
+      )
+  UNION
+    SELECT x_scid, 'funder', pg_temp.inter(x_nodes, y_nodes), NULL
+    FROM matching
+    WHERE pg_temp.matches(x_onchain->'txs'->'funding',
+            y_onchain->'txs'->'a' || y_onchain->'txs'->'b' || y_onchain->'txs'->'funding'
+          )
+  UNION
+    SELECT x_scid, 'a', x_onchain->>'a', (x_nodes - (x_onchain->>'a'))->>0
+    FROM matching
+    WHERE (x_onchain->'close'->'balance'->>'b')::int = 0
+      AND x_onchain->>'a' IS NOT NULL
+  UNION
+    SELECT x_scid, 'funder', x_onchain->>'funder', (x_nodes - (x_onchain->>'funder'))->>0
+    FROM matching
+    WHERE (x_onchain->'close'->'balance'->>'b')::int = 0
+      AND x_onchain->>'funder' IS NOT NULL
+), updates (scid, label, value) AS (
+    SELECT scid, label, value FROM partial_updates
+  UNION ALL
+    SELECT scid, ('["a", "b"]'::jsonb - label)->>0, other
+    FROM partial_updates
+    WHERE label = 'a' OR label = 'b'
+)
 
-    # match nodes sharing inputs with outputs across channels
-    if (
-        "funding" in match_summary
-        and len(match_summary) > 1
-        and None in {data1["a"], data2["a"], data1["funder"], data2["funder"]}
-    ):
-        updated = True
-        try:
-            if m.matches("a", "funding"):
-                common = set(nodes1).intersection(set(nodes2)).pop()
-                data1["a"] = nodes1.index(common)
-                data2["funder"] = nodes2.index(common)
-            if m.matches("b", "funding"):
-                common = set(nodes1).intersection(set(nodes2)).pop()
-                data1["b"] = nodes1.index(common)
-                data2["funder"] = nodes2.index(common)
-            if m.matches("funding", "a"):
-                common = set(nodes1).intersection(set(nodes2)).pop()
-                data2["a"] = nodes2.index(common)
-                data1["funder"] = nodes1.index(common)
-            if m.matches("funding", "b"):
-                common = set(nodes1).intersection(set(nodes2)).pop()
-                data2["b"] = nodes2.index(common)
-                data1["funder"] = nodes1.index(common)
-        except KeyError:
-            # funding to two different nodes may come from the same transaction
-            # since we're not tracking output number an error may happen here.
-            pass
-
-    # in any case we discovered either 'a' or 'b' for any peer, we now also
-    # know 'b' or 'a' for them
-    for data in [data1, data2]:
-        for x, y in [("a", "b"), ("b", "a")]:
-            if data[x] and not data[y]:
-                updated = True
-                if data["close"].get("type") == "penalty":
-                    # it's the same
-                    data[y] = data[x]
-                else:
-                    # it's the reverse
-                    data[y] = 1 - data[x]
-
-    # if we know the funder of two channels is the same we know who it is
-    if m.matches("funding", "funding") and None in {data1["funder"], data2["funder"]}:
-        try:
-            funder_id = set(nodes1).intersection(set(nodes2)).pop()
-            data1["funder"] = nodes1.index(funder_id)
-            data2["funder"] = nodes2.index(funder_id)
-            updated = True
-        except KeyError:
-            # funding to two different nodes may come from the same transaction
-            # since we're not tracking output number an error may happen here.
-            pass
-
-    # if the channel only has one close balance we automatically know things
-    for data in [data1, data2]:
-        if data["close"]["balance"]["b"] == 0 and not data.get("closer"):
-            updated = True
-            # 'a' is the closer.
-            data["closer"] = "a"
-            # if we know the funder we apply that to 'a'
-            if data["funder"]:
-                data["a"] = data["funder"]
-                data["b"] = 1 - data["a"]
-            # if we know 'a' we apply that to the funder
-            if data["a"]:
-                data["funder"] = data["a"]
-
-    if not updated:
-        return
-
-    for scid, data in [(scid1, data1), (scid2, data2)]:
-        print(
-            f'  result: {scid}, a: {data["a"]}, b: {data["b"]}, ({data["funder"]}->{data["closer"]})'
-        )
-
+SELECT updates.*
+FROM updates
+INNER JOIN channels ON channels.short_channel_id = updates.scid
+WHERE channels.onchain->>(updates.label) IS NULL
+    """,
+        (scid,),
+    )
+    for scid, label, value in db.fetchall():
+        print("    update", scid, label, "=", value)
         db.execute(
             """
 UPDATE channels
-SET onchain = %s
+SET onchain = jsonb_set(onchain, ARRAY[%s::text], to_jsonb(%s::text))
 WHERE short_channel_id = %s
         """,
-            (json.dumps(data), scid,),
+            (label, value, scid),
         )
-
-
-class Matcher:
-    def __init__(self, stuff1, stuff2):
-        nodes1, data1 = stuff1
-        nodes2, data2 = stuff2
-
-        self.txs = {
-            1: {
-                "a": set(data1["txs"]["a"]),
-                "b": set(data1["txs"]["b"]),
-                "funding": set(data1["txs"]["funding"]),
-            },
-            2: {
-                "a": set(data2["txs"]["a"]),
-                "b": set(data2["txs"]["b"]),
-                "funding": set(data2["txs"]["funding"]),
-            },
-        }
-
-    def matches(self, tag1, tag2):
-        return self.txs[1][tag1].intersection(self.txs[2][tag2])
