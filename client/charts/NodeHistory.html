@@ -24,8 +24,6 @@
       let open_block = chan.onchain.open.block
       let close_block = chan.onchain.close.block
 
-      console.log(open_block, close_block)
-
       // gather data for the chart
       opens[open_block] = opens[open_block] || 0
       open_sats[open_block] = open_sats[open_block] || 0
@@ -42,8 +40,6 @@
         blockmap[close_block] = true
       }
     }
-
-    console.log(blockmap)
 
     // make main chart
     let blocks = Object.keys(blockmap).sort()
