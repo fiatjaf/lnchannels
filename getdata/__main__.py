@@ -1,9 +1,8 @@
 import psycopg2
 
 from .globals import POSTGRES_URL
-from .listchannels import listchannels
+from .inspectblocks import inspectblocks
 from .listnodes import listnodes
-from .onchain import onchain
 from .chain_analysis import chain_analysis
 
 
@@ -12,20 +11,16 @@ def main():
         conn.autocommit = True
 
         with conn.cursor() as db:
-            print("inserting channels")
-            listchannels(db)
+            print("inspecting blocks")
+            inspectblocks(db)
 
-        with conn.cursor() as db:
-            print("inserting nodes")
-            listnodes(db)
+        # with conn.cursor() as db:
+        #     print("inserting nodes")
+        #     listnodes(db)
 
-        with conn.cursor() as db:
-            print("inserting onchain stuff")
-            onchain(db)
-
-        with conn.cursor() as db:
-            print("performing chain analysis")
-            chain_analysis(db)
+        # with conn.cursor() as db:
+        #     print("performing chain analysis")
+        #     chain_analysis(db)
 
         with conn.cursor() as db:
             db.execute("REFRESH MATERIALIZED VIEW nodes")

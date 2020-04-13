@@ -1,47 +1,62 @@
 CREATE TABLE IF NOT EXISTS channels (
   short_channel_id text PRIMARY KEY,
   nodes jsonb NOT NULL,
-  onchain jsonb NOT NULL DEFAULT '{
-    "a": null,
-    "b": null,
-    "funder": null,
-    "closer": null,
-    "taken": null,
-    "open": {
-      "block": null,
-      "txid": null,
-      "time": null,
-      "fee": null,
-      "address": null
-    },
-    "close": {
-      "block": null,
-      "txid": null,
-      "time": null,
-      "fee": null,
-      "balance": {
-        "a": 0,
-        "b": 0
-      },
-      "htlcs": {
-        "a": [],
-        "b": []
-      }
-    },
-    "txs": {
-      "a": [],
-      "b": [],
-      "funding": []
-    }
+
+  -- node identification
+  a text,
+  b text,
+  funder text,
+
+  -- labeled sides
+  closer text,
+  taken text,
+
+  open jsonb NOT NULL DEFAULT '{
+    "block": null,
+    "txid": null,
+    "time": null,
+    "fee": null,
+    "address": null
   }',
-  satoshis integer NOT NULL,
-  last_seen timestamp NOT NULL
+
+  close jsonb NOT NULL DEFAULT '{
+    "block": null,
+    "txid": null,
+    "time": null,
+    "fee": null,
+    "type": null,
+    "balance": {
+      "a": 0,
+      "b": 0
+    },
+    "htlcs": []
+  }',
+
+  -- data to perform chain analysis with
+  txs jsonb NOT NULL DEFAULT '{
+    "a": [],
+    "b": [],
+    "funding": []
+  }',
+
+  satoshis integer NOT NULL
 );
+
+ALTER TABLE channels DROP COLUMN last_seen;
+ALTER TABLE channels DROP COLUMN onchain;
+
 CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id);
 CREATE INDEX IF NOT EXISTS index_nodes ON channels USING gin (nodes);
-CREATE INDEX IF NOT EXISTS index_open ON channels USING gin ((onchain->'open'));
-CREATE INDEX IF NOT EXISTS index_close ON channels USING gin ((onchain->'close'));
+CREATE INDEX IF NOT EXISTS index_open ON channels USING gin (open);
+CREATE INDEX IF NOT EXISTS index_close ON channels USING gin (close);
+CREATE INDEX IF NOT EXISTS index_txs ON channels USING gin (txs);
 GRANT SELECT ON channels TO web_anon;
+
+CREATE TABLE IF NOT EXISTS try_later (
+  short_channel_id text PRIMARY KEY,
+  txid text,
+  tries int NOT NULL DEFAULT 1
+);
 
 CREATE TABLE IF NOT EXISTS nodealiases (
   pubkey text NOT NULL,
