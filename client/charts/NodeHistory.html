@@ -21,8 +21,8 @@
 
     for (let i = channels.length - 1; i >= 0; i--) {
       let chan = channels[i]
-      let open_block = chan.onchain.open.block
-      let close_block = chan.onchain.close.block
+      let open_block = chan.open.block
+      let close_block = chan.close.block
 
       // gather data for the chart
       opens[open_block] = opens[open_block] || 0

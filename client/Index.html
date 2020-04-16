@@ -20,7 +20,7 @@
   onMount(async () => {
     longestliving = await (
       await fetch(
-        `/api/channels?onchain->close->>block=not.is.NULL&order=onchain->open->>block.asc`,
+        `/api/channels?close->>block=not.is.NULL&order=open->>block.asc`,
         {
           headers: {
             'Range-Unit': 'item',
@@ -49,7 +49,7 @@
   onMount(async () => {
     crashed = await (
       await fetch(
-        `/api/channels?select=crash,short_channel_id,nodes,onchain,satoshis&crash=gt.0&order=crash.desc`,
+        `/api/channels?select=crash,short_channel_id,nodes,open,close,closer,taken,a,b,satoshis&crash=gt.0&order=crash.desc`,
         {
           headers: {
             'Range-Unit': 'items',
@@ -149,39 +149,29 @@
           {chan.satoshis}
         </td>
         <td>
-          {#if chan.onchain.close.type == 'penalty'}
+          {#if chan.close.type == 'penalty'}
           <span>
             closed with a
             <strong>penalty</strong> that has taken
-            <strong>{chan.onchain.close.balance[chan.onchain.taken]}</strong>
-            sat{#if chan.onchain.taken && chan.onchain.a}&nbsp;from
-            <Alias
-              pubkey="{chan.nodes[chan.onchain[chan.onchain.taken]]}"
-              link
-            />{/if}.
+            <strong>{chan.close.balance[chan.taken]}</strong>
+            sat{#if chan.taken && chan.a}&nbsp;from
+            <Alias pubkey="{chan.nodes[chan[chan.taken]]}" link />{/if}.
           </span>
-          {:else if chan.onchain.close.type == 'force'}
+          {:else if chan.close.type == 'force'}
           <span>
-            {#if chan.onchain.close.htlcs.a.length +
-            chan.onchain.close.htlcs.b.length == 0}
+            {#if chan.close.htlcs.a.length + chan.close.htlcs.b.length == 0}
             <span>
               lived for
-              <strong
-                >{chan.onchain.close.block - chan.onchain.open.block}</strong
-              >
+              <strong>{chan.close.block - chan.open.block}</strong>
               blocks and was suddenly
             </span>
             {/if}
-            <strong>force-closed</strong>{#if chan.onchain.closer &&
-            chan.onchain.a}&nbsp; by
-            <Alias
-              pubkey="{chan.nodes[chan.onchain[chan.onchain.closer]]}"
-              link
-            />{/if}{#if chan.onchain.close.htlcs.a.length +
-            chan.onchain.close.htlcs.b.length > 0}&nbsp;leaving
+            <strong>force-closed</strong>{#if chan.closer && chan.a}&nbsp; by
+            <Alias pubkey="{chan.nodes[chan[chan.closer]]}" link />{/if}{#if
+            chan.close.htlcs.a.length + chan.close.htlcs.b.length >
+            0}&nbsp;leaving
             <strong
-              >{chan.onchain.close.htlcs.a.length +
-              chan.onchain.close.htlcs.b.length}</strong
+              >{chan.close.htlcs.a.length + chan.close.htlcs.b.length}</strong
             >
             HTLCs to be resolved{/if}.
           </span>
@@ -219,7 +209,7 @@
             style="width:{100 * chan.satoshis / stats.max_channel_satoshis}%; background: var(--gold)"
           />
         </td>
-        <td>{chan.onchain.open.block}</td>
+        <td>{chan.open.block}</td>
         <td>
           <Alias pubkey="{chan.nodes[0]}" link />
         </td>
@@ -227,7 +217,7 @@
           <Alias pubkey="{chan.nodes[1]}" link />
         </td>
         <td>
-          {stats.last_block - chan.onchain.open.block}
+          {stats.last_block - chan.open.block}
           <i
             class="bar"
             style="width:{100 * chan.duration / stats.max_channel_duration}%; background: var(--gold)"

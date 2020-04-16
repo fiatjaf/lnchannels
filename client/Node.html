@@ -37,7 +37,7 @@
     for (let i = channels.length - 1; i >= 0; i--) {
       // data for the microcharts later
       let chan = channels[i]
-      let fee = chan.onchain.open.fee + (chan.onchain.close.fee || 0)
+      let fee = chan.open.fee + (chan.close.fee || 0)
       maxfee = fee > maxfee ? fee : maxfee
       maxcap = chan.satoshis > maxcap ? chan.satoshis : maxcap
     }
@@ -239,7 +239,7 @@
         {#each channels as channel}
         <tr
           id="ch-{channel.short_channel_id}"
-          class:closed="{channel.onchain.close.block > 0}"
+          class:closed="{channel.close.block > 0}"
         >
           <td data-size="{channel.peer.size}">
             <a href="/node/{channel.peer.id}">
@@ -260,26 +260,24 @@
             />
           </td>
           <td
-            title="{(100 * (channel.onchain.open.fee + channel.onchain.close.fee) / channel.satoshis).toFixed(2)}% of total value"
+            title="{(100 * (channel.open.fee + channel.close.fee) / channel.satoshis).toFixed(2)}% of total value"
           >
-            {channel.onchain.open.fee} {#if channel.onchain.close.block > 0} +
-            {channel.onchain.close.fee} = {channel.onchain.open.fee +
-            channel.onchain.close.fee} {/if}
+            {channel.open.fee} {#if channel.close.block > 0} +
+            {channel.close.fee} = {channel.open.fee + channel.close.fee} {/if}
 
             <i
               class="bar"
-              style="width:{(100 * (channel.onchain.open.fee + channel.onchain.close.fee) / maxfee).toFixed(2)}%; background: var(--gold)"
+              style="width:{(100 * (channel.open.fee + channel.close.fee) / maxfee).toFixed(2)}%; background: var(--gold)"
             />
           </td>
-          <td>{channel.onchain.open.block}</td>
+          <td>{channel.open.block}</td>
           <td>
-            {#if channel.onchain.close.block > 0} {channel.onchain.close.block}
-            {/if}
+            {#if channel.close.block > 0} {channel.close.block} {/if}
           </td>
-          {#if channel.onchain.close.block > 0}
+          {#if channel.close.block > 0}
           <td>
-            {#if channel.onchain.close.type}closed as
-            <strong>{channel.onchain.close.type}</strong>{/if}
+            {#if channel.close.type}closed as
+            <strong>{channel.close.type}</strong>{/if}
           </td>
           {:else}
           <td class:hidden="{direction !== 'outgoing'}">

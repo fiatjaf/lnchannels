@@ -1,162 +1,86 @@
 import json
-import requests
+from typing import Dict
 
-from .globals import ESPLORA, bitcoin
-
-
-class OnchainError(Exception):
-    pass
+from .utils import get_fee, get_outspends
+from .globals import bitcoin
 
 
-class ChannelStillOpen(OnchainError):
-    pass
+def onopen(db, blockheight: int, blocktime: int, tx: Dict, vout: Dict, ch: Dict):
+    node0, node1, towards = (
+        (ch["source"], ch["destination"], 1)
+        if ch["source"] < ch["destination"]
+        else (ch["destination"], ch["source"], 0)
+    )
 
+    txs_funding = set.union(
+        # txs that contributed inputs for the channel funding
+        {v["txid"] for v in tx["vin"]},
+        # TODO change outputs from the channel creation
+        # (must revisit this later to add more stuff?)
+        # {
+        #     s["txid"]
+        #     for i, s in enumerate(get_outspends(tx["txid"]))
+        #     if i != vout["n"] and s["spent"]
+        # },
+    )
 
-class OutputNotSpentYet(OnchainError):
-    pass
-
-
-def onchain(db):
-    print("")
-
+    params = (
+        ch["short_channel_id"],
+        json.dumps([node0, node1]),
+        ch["satoshis"],
+        ch["last_update"],
+        json.dumps(
+            {
+                "block": blockheight,
+                "txid": tx["txid"],
+                "address": vout["scriptPubKey"]["addresses"][0],
+                "time": blocktime,
+                "fee": get_fee(tx),
+            }
+        ),
+        json.dumps({"funding": list(txs_funding)}),
+        ch["short_channel_id"],
+    )
+    print(params)
     db.execute(
         """
-SELECT short_channel_id, onchain
-FROM channels
-WHERE onchain IS NULL
-  OR ( (onchain->'close'->'block' IS NULL OR onchain->'close'->>'block' IS NULL)
-   AND last_seen < now() - '1 day'::interval
-  )
-  OR ( (onchain->'close'->'type' IS NULL OR onchain->'close'->>'type' IS NULL)
-   AND last_seen < now() - '7 days'::interval
-  )
-ORDER BY short_channel_id
-""",
-    )
-
-    for scid, data in db.fetchall():
-        onchain_for_scid(db, scid, data)
-
-
-def onchain_for_scid(db, scid, data):
-    # get data for all possibly related channels
-    print("  onchain", scid)
-    data.setdefault("a", None)
-    data.setdefault("b", None)
-    data.setdefault("closer", None)
-    data.setdefault("funder", None)
-    data.setdefault(
-        "open",
-        {"block": None, "txid": None, "time": None, "fee": None, "address": None},
-    )
-    data.setdefault(
-        "close",
-        {
-            "block": None,
-            "txid": None,
-            "time": None,
-            "fee": None,
-            "balance": {"a": 0, "b": 0},
-            "htlcs": {"a": [], "b": []},
-        },
-    )
-    data.setdefault("txs", {"a": [], "b": [], "funding": []})
-
-    try:
-        onopen(scid, data)
-        isclosed(scid, data)
-        onclose(data)
-    except OutputNotSpentYet:
-        pass
-    except ChannelStillOpen:
-        pass
-    except OnchainError as exc:
-        print(exc)
-        return
-
-    db.execute(
-        """
+WITH ins AS (
+  INSERT INTO channels (short_channel_id, nodes, satoshis, last_update)
+  VALUES (%s, %s, %s, to_timestamp(%s))
+  ON CONFLICT (short_channel_id) DO NOTHING
+)
 UPDATE channels
-SET onchain = %s
+SET open = %s
+  , txs = txs || %s
 WHERE short_channel_id = %s
-           """,
-        (json.dumps(data), scid),
+        """,
+        params,
     )
 
 
-def onopen(scid, data):
-    if data["open"].get("block"):
-        return
-
-    # basic onchain data
-    blockheight, txindex, output = [int(part) for part in scid.split("x")]
-    block = bitcoin.getblock(bitcoin.getblockhash(blockheight))
-    txid = block["tx"][txindex]
-    tx = bitcoin.getrawtransaction(txid, True)
-    address = tx["vout"][output]["scriptPubKey"]["addresses"][0]
-
-    data["open"] = {
-        "block": blockheight,
-        "txid": txid,
-        "address": address,
-        "time": tx["blocktime"],
-        "fee": get_fee(tx),
-    }
-    data["txs"]["funding"] += [v["txid"] for v in tx["vin"]]
-
-
-def isclosed(scid, data):
-    if data["close"].get("block"):
-        return
-
-    chan_vout = int(scid.split("x")[2])
-    spends = get_outspends(data["open"]["txid"])
-    chan_spend = spends[chan_vout]
-    if not chan_spend["spent"] or "block_height" not in chan_spend["status"]:
-        raise ChannelStillOpen
-
-    close_txid = chan_spend["txid"]
-    close_tx = bitcoin.getrawtransaction(close_txid, True)
-
-    data["close"].update(
-        {
-            "block": chan_spend["status"]["block_height"],
-            "txid": close_txid,
-            "time": chan_spend["status"]["block_time"],
-            "fee": get_fee(close_tx),
-        }
-    )
-    data["txs"]["funding"] += [
-        # change outputs from this channel creation
-        s["txid"]
-        for i, s in enumerate(spends)
-        if i != chan_vout and s["spent"]
-    ]
-
-
-def onclose(data):
-    if data["close"].get("type"):
-        return
-
+def onclose(db, blockheight, blocktime, tx, vin, scid):
     txs = {"a": set(), "b": set()}
-
-    close_tx = bitcoin.getrawtransaction(data["close"]["txid"], True)
-    spends = get_outspends(data["close"]["txid"])
+    spends = get_outspends(tx["txid"])
     kinds = set()
+    htlc_list = []
+    balance = {"a": 0, "b": 0}
     htlcs = []
+    taken = None
+    closer = None
+    close_type = "unknown"
 
     # inspect each output of the closing transaction
     # (we'll have to look at the transactions that spend them)
     next_side = "a"  # the first 'balance' or 'any' output is 'a', the second is 'b'
     for i, spend in enumerate(spends):
-        amount = int(close_tx["vout"][i]["value"] * 100000000)
+        amount = int(tx["vout"][i]["value"] * 100000000)
         side = next_side
 
         if spend["spent"] == False:
             # big indicator of mutual closure
             kinds.add("any")
             next_side = "b"
-            data["close"]["balance"][side] = amount
+            balance[side] = amount
         else:
             f = bitcoin.getrawtransaction(spend["txid"], True)
             witness = f["vin"][spend["vin"]]["txinwitness"]
@@ -167,13 +91,13 @@ def onclose(data):
                 # paying to a pubkey
                 kinds.add("any")
                 next_side = "b"
-                data["close"]["balance"][side] = amount
+                balance[side] = amount
                 txs[side].add(spend["txid"])
             else:
                 script = bitcoin.decodescript(witness[-1])["asm"]
                 if "OP_HASH160" in script:
                     kinds.add("htlc")
-                    htlcs.append(
+                    htlc_list.append(
                         {
                             "script": script,
                             "amount": amount,
@@ -182,7 +106,7 @@ def onclose(data):
                         }
                     )
                 elif "OP_CHECKSEQUENCEVERIFY" in script:
-                    data["close"]["balance"][side] = amount
+                    balance[side] = amount
                     next_side = "b"
 
                     for next_spend in get_outspends(spend["txid"]):
@@ -197,38 +121,38 @@ def onclose(data):
                         # as both 'a' and 'b' outputs will go to the same peer.
 
                         # however we do mark the side that was appropriated
-                        data["taken"] = side
+                        taken = side
                     else:
                         kinds.add("delayed")
 
                         # in case of a delayed output, we know this was the force-closer
-                        data["closer"] = side
+                        closer = side
                 else:
                     # paying to a custom address, means the same as a pubkey
                     # (it's anything the peer wants to spend to either in a
                     #  mutual close or when the other party is force-closing)
                     kinds.add("any")
-                    data["close"]["balance"][side] = amount
+                    balance[side] = amount
                     txs[side].add(spend["txid"])
                     next_side = "b"
 
     # now that we have kinds of all outputs we can determine the closure type
     if kinds == {"any"}:
-        data["close"]["type"] = "mutual"
+        close_type = "mutual"
     elif "penalty" in kinds:
-        data["close"]["type"] = "penalty"
+        close_type = "penalty"
     elif "htlc" in kinds or "delayed" in kinds:
-        data["close"]["type"] = "force"
+        close_type = "force"
     else:
-        data["close"]["type"] = "unknown"
+        close_type = "unknown"
 
     # in case of htlcs, we want to know to each side they went
-    if data["closer"]:
+    if closer:
         closer, noncloser = (
-            data["closer"],
-            "b" if data["closer"] == "a" else "a",
+            closer,
+            "b" if closer == "a" else "a",
         )
-        for htlc in htlcs:
+        for htlc in htlc_list:
             # first we check if there's an htlc-success or htlc-timeout spending this
             spends = get_outspends(htlc["txid"])
 
@@ -254,64 +178,47 @@ def onclose(data):
                     if s["spent"]:
                         txs[noncloser].add(s["txid"])
 
-            amt = htlc["amount"]
-
-            if "OP_NOTIF" in htlc["script"]:
-                # from the point of view of closer, this is an offered htlc
-                if has_covenant:
-                    # it goes to the closer if there is an htlc-timeout tx
-                    data["close"]["htlcs"][closer].append(
-                        {"amount": amt, "kind": "timeout"}
+            htlcs.append(
+                {
+                    "amount": htlc["amount"],
+                    # OP_NOTIF indicates it was offered to the closer
+                    "offerer": noncloser if "OP_NOTIF" in htlc["script"] else closer,
+                    # when the htlc is spent with a covenant it means the closer got it
+                    "fulfilled": True
+                    if (
+                        ("OP_NOTIF" in htlc["script"] and has_covenant)
+                        or ("OP_NOTIF" not in htlc["script"] and not has_covenant)
                     )
-                else:
-                    # otherwise goes to the noncloser (spending from here directly)
-                    data["close"]["htlcs"][noncloser].append(
-                        {"amount": amt, "kind": "success"}
-                    )
-            else:
-                # from the point of view of closer, this is a received htlc
-                if has_covenant:
-                    # it goes to the closer if there is an htlc-success tx
-                    data["close"]["htlcs"][closer].append(
-                        {"amount": amt, "kind": "success"}
-                    )
-                else:
-                    # otherwise goes to the noncloser (spending from here directly)
-                    data["close"]["htlcs"][noncloser].append(
-                        {"amount": amt, "kind": "timeout"}
-                    )
-
-    data["txs"]["a"] = list(txs["a"])
-    data["txs"]["b"] = list(txs["b"])
-
-
-def get_outspends(txid):
-    return call_esplora(f"/tx/{txid}/outspends")
-
-
-def call_esplora(path):
-    try:
-        r = requests.get(f"{ESPLORA}/{path}")
-    except requests.exceptions.ConnectionError:
-        raise OnchainError()
-    if not r.ok:
-        raise OnchainError()
-    return r.json()
-
-
-def get_fee(tx):
-    # multiply stuff by 100000000 because bitcoind returns values in btc
-    inputsum = sum(
-        [
-            int(
-                bitcoin.getrawtransaction(inp["txid"], True)["vout"][inp["vout"]][
-                    "value"
-                ]
-                * 100000000
+                    else False,
+                }
             )
-            for inp in tx["vin"]
-        ]
-    )
-    outputsum = sum([int(out["value"] * 100000000) for out in tx["vout"]])
 
-    return inputsum - outputsum
+    params = (
+        json.dumps(
+            {
+                "block": blockheight,
+                "txid": tx["txid"],
+                "time": blocktime,
+                "fee": get_fee(tx),
+                "type": close_type,
+                "balance": balance,
+                "htlcs": htlcs,
+            }
+        ),
+        json.dumps({"a": list(txs["a"]), "b": list(txs["b"])}),
+        taken,
+        closer,
+        scid,
+    )
+    print(params)
+    db.execute(
+        """
+UPDATE channels
+SET close = %s
+  , txs = txs || %s
+  , taken = %s
+  , closer = %s
+WHERE short_channel_id = %s
+    """,
+        params,
+    )

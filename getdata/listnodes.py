@@ -1,4 +1,5 @@
 import requests
+from tqdm import tqdm
 
 from .globals import SPARK_URL, SPARK_TOKEN
 
@@ -7,7 +8,7 @@ def listnodes(db):
     r = requests.post(
         SPARK_URL, headers={"X-Access": SPARK_TOKEN}, json={"method": "listnodes"}
     )
-    for node in r.json()["nodes"]:
+    for node in tqdm(r.json()["nodes"], leave=True, desc="listnodes"):
         # alias, color
         savealias(db, node)
         savefeatures(db, node)

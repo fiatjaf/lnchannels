@@ -39,10 +39,10 @@ CREATE TABLE IF NOT EXISTS channels (
     "funding": []
   }',
 
-  satoshis integer NOT NULL
+  satoshis integer NOT NULL,
+  last_update timestamp NOT NULL
 );
 
-ALTER TABLE channels DROP COLUMN last_seen;
 ALTER TABLE channels DROP COLUMN onchain;
 
 CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id);
@@ -104,18 +104,18 @@ CREATE MATERIALIZED VIEW nodes AS
         SELECT nodes->>0 AS pubkey, * FROM channels
       UNION ALL
         SELECT nodes->>1 AS pubkey, * FROM channels
-    )x WHERE onchain->'close'->>'block' IS NULL GROUP BY pubkey
+    )x WHERE close->>'block' IS NULL GROUP BY pubkey
   ), agg AS (
     SELECT pubkey,
-      min((onchain->'open'->>'block')::int) AS oldestchannel,
-      count(onchain->'close'->>'block' IS NOT NULL) AS closedchannels,
-      avg(CASE WHEN onchain->'close'->>'block' IS NOT NULL
-        THEN (onchain->'close'->>'block')::int
-        ELSE (SELECT (onchain->'open'->>'block')::int FROM channels
-              ORDER BY (onchain->'open'->>'block')::int DESC LIMIT 1)
-      END - (onchain->'open'->>'block')::int) AS avg_duration,
-      avg((onchain->'open'->>'fee')::int) AS avg_open_fee,
-      avg((onchain->'close'->>'fee')::int) AS avg_close_fee
+      min((open->>'block')::int) AS oldestchannel,
+      count(close->>'block' IS NOT NULL) AS closedchannels,
+      avg(CASE WHEN close->>'block' IS NOT NULL
+        THEN (close->>'block')::int
+        ELSE (SELECT (open->>'block')::int FROM channels
+              ORDER BY (open->>'block')::int DESC LIMIT 1)
+      END - (open->>'block')::int) AS avg_duration,
+      avg((open->>'fee')::int) AS avg_open_fee,
+      avg((close->>'fee')::int) AS avg_close_fee
     FROM (
       SELECT nodes->>0 AS pubkey, * FROM channels UNION ALL SELECT nodes->>1 AS pubkey, * FROM channels
     )z GROUP BY pubkey
@@ -140,18 +140,18 @@ CREATE MATERIALIZED VIEW globalstats AS
   WITH last_block AS (
     SELECT max(b) AS last_block
     FROM (
-        SELECT max((onchain->'open'->>'block')::int) AS b FROM channels
+        SELECT max((open->>'block')::int) AS b FROM channels
       UNION ALL
-        SELECT max((onchain->'close'->>'block')::int) AS b FROM channels
+        SELECT max((close->>'block')::int) AS b FROM channels
     )x
   ), channels AS (
     SELECT
-      max(CASE WHEN onchain->'close'->>'block' IS NULL
-        THEN (onchain->'close'->>'block')::int
+      max(CASE WHEN close->>'block' IS NULL
+        THEN (close->>'block')::int
         ELSE (SELECT last_block FROM last_block)
-      END - (onchain->'open'->>'block')::int) AS max_duration,
-      max((onchain->'open'->>'fee')::int) AS max_open_fee,
-      max((onchain->'close'->>'fee')::int) AS max_close_fee,
+      END - (open->>'block')::int) AS max_duration,
+      max((open->>'fee')::int) AS max_open_fee,
+      max((close->>'fee')::int) AS max_close_fee,
       max(satoshis) AS max_satoshis
     FROM channels
   ), nodes AS (
@@ -186,14 +186,14 @@ GRANT SELECT ON globalstats TO web_anon;
 CREATE MATERIALIZED VIEW closetypes AS
   WITH base AS (
     SELECT
-      ((onchain->'close'->>'block')::int / 1000) * 1000 AS blockgroup,
-      onchain->'close'->>'type' AS typ,
-      (onchain->'close'->'balance'->>'b')::int > 0 AS used,
-      jsonb_array_length(onchain->'close'->'htlcs'->'a') > 0 OR jsonb_array_length(onchain->'close'->'htlcs'->'b') > 0 AS inflight,
+      ((close->>'block')::int / 1000) * 1000 AS blockgroup,
+      close->>'type' AS typ,
+      (close->'balance'->>'b')::int > 0 AS used,
+      jsonb_array_length(close->'htlcs') > 0 AS inflight,
       count(*) AS c,
       sum(satoshis) AS s
     FROM channels
-    WHERE onchain->'close'->>'block' IS NOT NULL
+    WHERE close->>'block' IS NOT NULL
     GROUP BY blockgroup, typ, used, inflight
   )
   SELECT
@@ -232,53 +232,52 @@ RETURNS TABLE (
         count(*) AS opened,
         0 AS closed,
         sum(satoshis) AS cap_change,
-        sum((onchain->'open'->>'fee')::int) + sum((onchain->'close'->>'fee')::int) AS fee,
+        sum((open->>'fee')::int) + sum((close->>'fee')::int) AS fee,
         0 AS htlcs
       FROM channels
-      WHERE (onchain->'open'->>'block')::int < since_block
+      WHERE (open->>'block')::int < since_block
       GROUP BY ((since_block/100)-1)*100
     UNION ALL
       -- ongoing opens
-      SELECT ((onchain->'open'->>'block')::int/100)*100 AS blockgroup,
-        count((onchain->'open'->>'block')::int) AS opened,
+      SELECT ((open->>'block')::int/100)*100 AS blockgroup,
+        count((open->>'block')::int) AS opened,
         0 AS closed,
         sum(satoshis) AS cap_change,
-        sum((onchain->'open'->>'fee')::int) AS fee,
+        sum((open->>'fee')::int) AS fee,
         0 AS htlcs
       FROM channels
-      WHERE (onchain->'open'->>'block')::int >= since_block
-      GROUP BY (onchain->'open'->>'block')::int/100
+      WHERE (open->>'block')::int >= since_block
+      GROUP BY (open->>'block')::int/100
     UNION ALL
       -- ongoing closes
-      SELECT ((onchain->'close'->>'block')::int/100)*100 AS blockgroup,
+      SELECT ((close->>'block')::int/100)*100 AS blockgroup,
         0 AS opened,
-        count((onchain->'close'->>'block')::int) AS closed,
+        count((close->>'block')::int) AS closed,
         -sum(satoshis) AS cap_change,
-        sum((onchain->'close'->>'fee')::int) AS fee,
-        sum(jsonb_array_length(onchain->'close'->'htlcs'->'a') + jsonb_array_length(onchain->'close'->'htlcs'->'b')) AS htlcs
+        sum((close->>'fee')::int) AS fee,
+        sum(jsonb_array_length(close->'htlcs')) AS htlcs
       FROM channels
-      WHERE onchain->'close'->>'block' IS NOT NULL AND (onchain->'close'->>'block')::int >= since_block
-      GROUP BY (onchain->'close'->>'block')::int/100
+      WHERE close->>'block' IS NOT NULL AND (close->>'block')::int >= since_block
+      GROUP BY (close->>'block')::int/100
   ) AS main
   GROUP BY blockgroup
   ORDER BY blockgroup
 $$ LANGUAGE SQL STABLE;
 
 -- assess how much a channel closure was bad
-CREATE OR REPLACE FUNCTION crash (c channels) RETURNS integer AS $$
+CREATE OR REPLACE FUNCTION crash (c channels) RETURNS bigint AS $$
   SELECT
     CASE
-      WHEN c.onchain->'close'->>'type' = 'penalty' THEN
-        (c.onchain->'close'->'balance'->>(c.onchain->>'taken'))::int / 7000
-      WHEN c.onchain->'close'->>'type' = 'force' THEN
+      WHEN c.close->>'type' = 'penalty' THEN
+        (c.close->'balance'->>(c.taken))::int / 7000
+      WHEN c.close->>'type' = 'force' THEN
         10
-        + (jsonb_array_length(c.onchain->'close'->'htlcs'->'a')
-           * (CASE WHEN c.onchain->>'closer' = 'a' THEN 15 ELSE 8 END))
-        + (jsonb_array_length(c.onchain->'close'->'htlcs'->'b')
-          * (CASE WHEN c.onchain->>'closer' = 'b' THEN 15 ELSE 8 END))
-        + (CASE WHEN (c.onchain->'close'->'balance'->>'b')::int = 0 THEN 5 ELSE 0 END)
-        + (144 * 15
-          / ((c.onchain->'close'->>'block')::int - (c.onchain->'open'->>'block')::int))
+        + (SELECT
+             sum(CASE WHEN value->>'offerer' = c.closer THEN 16 ELSE 8 END)
+           FROM jsonb_array_elements(c.close->'htlcs'))
+        + (CASE WHEN (c.close->'balance'->>'b')::int = 0 THEN 7 ELSE 0 END)
+        + (144 * 10
+          / ((c.close->>'block')::int - (c.open->>'block')::int))
       ELSE 0
     END
 $$ LANGUAGE SQL STABLE;
@@ -326,7 +325,8 @@ CREATE OR REPLACE FUNCTION node_channels (nodepubkey text)
 RETURNS TABLE (
   short_channel_id text,
   peer jsonb,
-  onchain jsonb,
+  open jsonb,
+  close jsonb,
   satoshis int,
   outpol jsonb,
   inpol jsonb
@@ -345,7 +345,8 @@ RETURNS TABLE (
           (SELECT capacity FROM nodes WHERE pubkey = ((nodes - nodepubkey)->>0)
         ), 0)
     ) AS peer,
-    onchain,
+    open,
+    close,
     satoshis,
     jsonb_build_object(
       'base',
@@ -389,7 +390,7 @@ RETURNS TABLE (
      ON p_in.short_channel_id = channels.short_channel_id
     AND p_in.direction = CASE WHEN nodes->>0 = nodepubkey THEN 0 ELSE 1 END
   WHERE nodes ? nodepubkey
-  ORDER BY (onchain->'open'->>'block')::int DESC
+  ORDER BY (open->>'block')::int DESC
 $$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION search(query text)
@@ -408,15 +409,15 @@ RETURNS TABLE (
       'channel' AS kind,
       short_channel_id || ' (' || satoshis || ' sat)' AS label,
       '/channel/' || short_channel_id AS url,
-      onchain->'close'->>'block' IS NOT NULL AS closed
+      close->>'block' IS NOT NULL AS closed
     FROM channels
     WHERE (
           short_channel_id >= (SELECT query FROM q)
       AND short_channel_id < (SELECT query FROM q) || 'Z'
     )
-      OR onchain->'open'->>'txid' = (SELECT query FROM q)
-      OR onchain->'close'->>'txid' = (SELECT query FROM q)
-      OR onchain->'open'->>'address' = (SELECT query FROM q)
+      OR open->>'txid' = (SELECT query FROM q)
+      OR close->>'txid' = (SELECT query FROM q)
+      OR open->>'address' = (SELECT query FROM q)
   UNION ALL
     SELECT
       'node' AS kind,

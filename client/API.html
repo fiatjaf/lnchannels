@@ -101,54 +101,52 @@
       "02b0172bb38617fa3afdb69664468b492d5a21062a4fa8b47284b0cc320e6e7420",
       "03a503d8e30f2ff407096d235b5db63b4fcf3f89a653acb6f43d3fc492a7674019"
     ],
-    "onchain": {
-      "a": 1,
-      "b": 0,
-      "txs": {
-        "a": [
-          "335e31061845abb14f38476d1e0cfb594bda83432dc23ea3036ffc3684b550a9",
-          "7e47fae4d5c70ebc9ea1b697ee46577b4887400674b7692dc6d2e22560b52903"
-        ],
-        "b": [
-          "e65c9e3f1c9e9d6dbd7fec573748b74910bf7d571ed5861de314a7332d74d0f6"
-        ],
-        "funding": [
-          "ab5f85d8f482cedb0b3f58d999f1d53a98436f01f8e899d58e4e9c3330a8f422",
-          "a333c58d3a1c943435fdffdb136647cf8fd0050a4a2f9de096fe8a6d226fcdca"
-        ]
-      },
-      "open": {
-        "fee": 154,
-        "time": 1541379923,
-        "txid": "e0367a661ce701e13d13720176f452d885c5fc40d4c323fa9d96a8aafa199453",
-        "block": 548804,
-        "address": "bc1qd6hcfq7ky6de5p6ng5v28gpkd4pfxc6jllp7hhca0yjhsz6xt4ws22e5jl"
-      },
-      "close": {
-        "fee": 6722,
-        "time": 1567176161,
-        "txid": "bd5e90eb5580abb366b2ef0add5132508b6ae7b1f632de01681a06e66bf34d3a",
-        "type": "force",
-        "block": 592447,
-        "htlcs": {
-          "a": [
-            {
-              "kind": "timeout",
-              "amount": 258151
-            }
-          ],
-          "b": []
-        },
-        "balance": {
-          "a": 146883,
-          "b": 388244
-        }
-      },
-      "closer": "b",
-      "funder": 0
+    "a": 1,
+    "b": 0,
+    "txs": {
+      "a": [
+        "335e31061845abb14f38476d1e0cfb594bda83432dc23ea3036ffc3684b550a9",
+        "7e47fae4d5c70ebc9ea1b697ee46577b4887400674b7692dc6d2e22560b52903"
+      ],
+      "b": [
+        "e65c9e3f1c9e9d6dbd7fec573748b74910bf7d571ed5861de314a7332d74d0f6"
+      ],
+      "funding": [
+        "ab5f85d8f482cedb0b3f58d999f1d53a98436f01f8e899d58e4e9c3330a8f422",
+        "a333c58d3a1c943435fdffdb136647cf8fd0050a4a2f9de096fe8a6d226fcdca"
+      ]
     },
+    "open": {
+      "fee": 154,
+      "time": 1541379923,
+      "txid": "e0367a661ce701e13d13720176f452d885c5fc40d4c323fa9d96a8aafa199453",
+      "block": 548804,
+      "address": "bc1qd6hcfq7ky6de5p6ng5v28gpkd4pfxc6jllp7hhca0yjhsz6xt4ws22e5jl"
+    },
+    "close": {
+      "fee": 6722,
+      "time": 1567176161,
+      "txid": "bd5e90eb5580abb366b2ef0add5132508b6ae7b1f632de01681a06e66bf34d3a",
+      "type": "force",
+      "block": 592447,
+      "htlcs": {
+        "a": [
+          {
+            "kind": "timeout",
+            "amount": 258151
+          }
+        ],
+        "b": []
+      },
+      "balance": {
+        "a": 146883,
+        "b": 388244
+      }
+    },
+    "closer": "b",
+    "funder": 0
     "satoshis": 800000,
-    "last_seen": "2019-09-15T03:25:38"
+    "last_update": "2019-09-15T03:25:38"
   },
   ...
 ]`}
@@ -165,14 +163,13 @@
         <li>
           <code class="code"
             >curl
-            '{endpoint}/channels?onchain&gt;open&gt;&gt;block=gte.622000&amp;onchain-&gt;open-&gt;&gt;block=lt.623000'</code
+            '{endpoint}/channels?open&gt;&gt;block=gte.622000&amp;open-&gt;&gt;block=lt.623000'</code
           >
           returns only channels created between blocks 622000 and 622999.
         </li>
         <li>
           <code class="code"
-            >curl
-            '{endpoint}/channels?onchain&gt;close&gt;&gt;type=eq.penalty'</code
+            >curl '{endpoint}/channels?close&gt;&gt;type=eq.penalty'</code
           >
           returns only channels closed with penalty transactions.
         </li>

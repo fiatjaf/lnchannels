@@ -10,38 +10,39 @@
   var channel = {
     short_channel_id: 'loading',
     nodes: ['', ''],
-    onchain: {open: {}, close: {}}
+    open: {},
+    close: {}
   }
   var upwardpolicies = []
   var downwardpolicies = []
   var stats = {}
 
-  $: htlcs = channel.onchain.close.htlcs
-    ? channel.onchain.close.htlcs.a
-        .map(htlc => ({...htlc, owner: 'a'}))
-        .concat(
-          channel.onchain.close.htlcs.b.map(htlc => ({...htlc, owner: 'b'}))
-        )
-        .map((htlc, i) => {
-          if (channel.onchain.a) {
-            htlc.owner = channel.nodes[channel.onchain[htlc.owner]]
-          } else if (channel.onchain.closer) {
-            htlc.owner =
-              htlc.owner === channel.onchain.closer
-                ? 'the one who closed'
-                : "the one who didn't close"
-          } else if (channel.onchain.close.htlcs.a.length) {
-            htlc.owner = htlc.owner === 'a' ? 'someone' : 'someone else'
-          } else {
-            htlc.owner = 'unknown'
-          }
-          return htlc
-        })
+  $: htlcs = channel.close.htlcs
+    ? channel.close.htlcs.map((htlc, i) => {
+        if (channel.a) {
+          htlc.offerer =
+            channel.nodes[
+              htlc.fulfilled ? channel[htlc.offerer] : 1 - channel[htlc.offerer]
+            ]
+        } else if (channel.closer) {
+          htlc.offerer =
+            htlc.offerer === channel.closer
+              ? 'the one who closed'
+              : "the one who didn't close"
+        } else if (channel.close.htlcs.a.length) {
+          // this should never happen as a force-closed channel
+          // will always have a known closer
+          htlc.offerer = htlc.offerer === 'a' ? 'someone' : 'someone else'
+        } else {
+          htlc.offerer = 'unknown'
+        }
+        return htlc
+      })
     : []
-  $: closebalances = channel.onchain.a
+  $: closebalances = channel.a
     ? channel.nodes
-        .map((_, idx) => (channel.onchain.a === idx ? 'a' : 'b'))
-        .map(letter => channel.onchain.close.balance[letter])
+        .map((_, idx) => (channel.a === idx ? 'a' : 'b'))
+        .map(letter => channel.close.balance[letter])
     : null
 
   const id = getContext('history')
@@ -91,7 +92,7 @@
 <div>
   <h1>
     channel
-    <pre class="id" class:closed="{channel.onchain.close.block}">
+    <pre class="id" class:closed="{channel.close.block}">
     {channel.short_channel_id}
   </pre
     >
@@ -107,11 +108,11 @@
       <th>satoshis</th>
       <td>{channel.satoshis}</td>
     </tr>
-    {#if channel.onchain.funder}
+    {#if channel.funder}
     <tr>
       <th>funder</th>
       <td>
-        <Alias pubkey="{channel.nodes[channel.onchain.funder]}" />
+        <Alias pubkey="{channel.nodes[channel.funder]}" />
       </td>
     </tr>
 
@@ -152,36 +153,32 @@
     <tr>
       <th>duration</th>
       <td>
-        {#if channel.onchain.close.block} {channel.onchain.close.block -
-        channel.onchain.open.block} blocks
+        {#if channel.close.block} {channel.close.block - channel.open.block}
+        blocks
         <i
           class="bar"
-          style="width:{100 * (channel.onchain.close.block - channel.onchain.open.block) / stats.max_channel_duration}%; background: var(--gold)"
+          style="width:{100 * (channel.close.block - channel.open.block) / stats.max_channel_duration}%; background: var(--gold)"
         />
-        {:else} {stats.last_block - channel.onchain.open.block} blocks and
-        counting
+        {:else} {stats.last_block - channel.open.block} blocks and counting
         <i
           class="bar"
-          style="width:{100 * (stats.last_block - channel.onchain.open.block) / stats.max_channel_duration}%; background: var(--gold)"
+          style="width:{100 * (stats.last_block - channel.open.block) / stats.max_channel_duration}%; background: var(--gold)"
         />
         {/if}
       </td>
     </tr>
-    {#if channel.onchain.close.type}
+    {#if channel.close.type}
     <tr>
       <th>close type</th>
       <td>
-        {channel.onchain.close.type} {#if channel.onchain.close.balance.b ==
-        0}(unused){/if}
+        {channel.close.type} {#if channel.close.balance.b == 0}(unused){/if}
       </td>
     </tr>
-    {/if} {#if channel.onchain.closer && channel.onchain.a}
+    {/if} {#if channel.closer && channel.a}
     <tr>
       <th>force closer</th>
       <td>
-        <Alias
-          pubkey="{channel.nodes[channel.onchain[channel.onchain.closer]]}"
-        />
+        <Alias pubkey="{channel.nodes[channel[channel.closer]]}" />
       </td>
     </tr>
     {/if} {#if htlcs.length}
@@ -190,15 +187,15 @@
       <td>
         <table>
           <tr>
-            <th>offered to</th>
+            <th>sent by</th>
             <th>sat</th>
             <th>result</th>
           </tr>
           {#each htlcs as htlc}
           <tr>
-            <td>{htlc.owner}</td>
+            <td>{htlc.offerer}</td>
             <td>{htlc.amount}</td>
-            <td>{htlc.kind}</td>
+            <td>{#if htlc.fulfilled}fulfill{:else}timeout{/if}</td>
           </tr>
           {/each}
         </table>
@@ -282,38 +279,38 @@
       <th>open</th>
       <td>
         <a
-          href="https://blockstream.info/block/{channel.onchain.open.block}"
-          title="{channel.onchain.open.time}"
+          href="https://blockstream.info/block/{channel.open.block}"
+          title="{channel.open.time}"
         >
-          {channel.onchain.open.block}
+          {channel.open.block}
         </a>
       </td>
       <td>
         <a
-          href="https://blockstream.info/tx/{channel.onchain.open.txid}?output:{channel.short_channel_id.split('x')[2]}"
+          href="https://blockstream.info/tx/{channel.open.txid}?output:{channel.short_channel_id.split('x')[2]}"
         >
-          {channel.onchain.open.txid}
+          {channel.open.txid}
         </a>
       </td>
-      <td>{channel.onchain.open.fee} sat</td>
+      <td>{channel.open.fee} sat</td>
     </tr>
-    {#if channel.onchain.close.block}
+    {#if channel.close.block}
     <tr>
       <th>close</th>
       <td>
         <a
-          href="https://blockstream.info/block/{channel.onchain.close.block}"
-          title="{channel.onchain.close.time}"
+          href="https://blockstream.info/block/{channel.close.block}"
+          title="{channel.close.time}"
         >
-          {channel.onchain.close.block}
+          {channel.close.block}
         </a>
       </td>
       <td>
-        <a href="https://blockstream.info/tx/{channel.onchain.close.txid}">
-          {channel.onchain.close.txid}
+        <a href="https://blockstream.info/tx/{channel.close.txid}">
+          {channel.close.txid}
         </a>
       </td>
-      <td>{channel.onchain.close.fee} sat</td>
+      <td>{channel.close.fee} sat</td>
     </tr>
     {/if}
   </table>

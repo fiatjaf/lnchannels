@@ -1,6 +1,4 @@
-interval = 300
-global_start = 580000
-global_end = 631001
+import json
 
 
 def chain_analysis(db):
@@ -28,10 +26,10 @@ $$ LANGUAGE SQL;
         """
 SELECT short_channel_id
 FROM channels
-WHERE onchain->'close'->>'block' IS NOT NULL
+WHERE close->>'block' IS NOT NULL
   AND (
-      onchain->>'a' IS NULL
-   OR onchain->>'funder' IS NULL
+      a IS NULL
+   OR funder IS NULL
   )
 ORDER BY short_channel_id
     """
@@ -46,8 +44,10 @@ def run_for_channel(db, scid):
     db.execute(
         """
 WITH matching AS (
-  SELECT x.short_channel_id AS x_scid, x.nodes AS x_nodes, x.onchain AS x_onchain,
-         y.short_channel_id AS y_scid, y.nodes AS y_nodes, y.onchain AS y_onchain
+  SELECT x.short_channel_id AS x_scid, x.nodes AS x_nodes,
+         x.close AS x_close, x.txs AS x_txs,
+         y.short_channel_id AS y_scid, y.nodes AS y_nodes,
+         y.close AS y_close, y.txs AS y_txs
   FROM (SELECT * FROM channels WHERE short_channel_id = %s) AS x
   INNER JOIN channels AS y
      ON pg_temp.matches(x.nodes, y.nodes)
@@ -55,38 +55,38 @@ WITH matching AS (
 ), partial_updates (scid, label, value, other) AS (
     SELECT x_scid, 'a', pg_temp.inter(x_nodes, y_nodes), pg_temp.diff(x_nodes, y_nodes)
     FROM matching
-    WHERE x_onchain->'close'->>'type' != 'penalty'
-      AND pg_temp.matches(x_onchain->'txs'->'a',
-            y_onchain->'txs'->'a' || y_onchain->'txs'->'b' || y_onchain->'txs'->'funding'
+    WHERE x_close->>'type' != 'penalty'
+      AND pg_temp.matches(x_txs->'a',
+            y_txs->'a' || y_txs->'b' || y_txs->'funding'
           )
   UNION
     SELECT x_scid, 'a', pg_temp.inter(x_nodes, y_nodes), pg_temp.inter(x_nodes, y_nodes)
     FROM matching
-    WHERE x_onchain->'close'->>'type' = 'penalty'
+    WHERE x_close->>'type' = 'penalty'
       AND (
-          pg_temp.matches(x_onchain->'txs'->'a',
-            y_onchain->'txs'->'a' || y_onchain->'txs'->'b' || y_onchain->'txs'->'funding'
+          pg_temp.matches(x_txs->'a',
+            y_txs->'a' || y_txs->'b' || y_txs->'funding'
           )
-       OR pg_temp.matches(x_onchain->'txs'->'a',
-            y_onchain->'txs'->'b' || y_onchain->'txs'->'b' || y_onchain->'txs'->'funding'
+       OR pg_temp.matches(x_txs->'a',
+            y_txs->'b' || y_txs->'b' || y_txs->'funding'
           )
       )
   UNION
     SELECT x_scid, 'funder', pg_temp.inter(x_nodes, y_nodes), NULL
     FROM matching
-    WHERE pg_temp.matches(x_onchain->'txs'->'funding',
-            y_onchain->'txs'->'a' || y_onchain->'txs'->'b' || y_onchain->'txs'->'funding'
+    WHERE pg_temp.matches(x_txs->'funding',
+            y_txs->'a' || y_txs->'b' || y_txs->'funding'
           )
   UNION
-    SELECT x_scid, 'a', x_onchain->>'a', (x_nodes - (x_onchain->>'a'))->>0
+    SELECT x_scid, 'a', x_a, (x_nodes - (x_a))->>0
     FROM matching
-    WHERE (x_onchain->'close'->'balance'->>'b')::int = 0
-      AND x_onchain->>'a' IS NOT NULL
+    WHERE (x_close->'balance'->>'b')::int = 0
+      AND x_a IS NOT NULL
   UNION
-    SELECT x_scid, 'funder', x_onchain->>'funder', (x_nodes - (x_onchain->>'funder'))->>0
+    SELECT x_scid, 'funder', x_funder, (x_nodes - (x_funder))->>0
     FROM matching
-    WHERE (x_onchain->'close'->'balance'->>'b')::int = 0
-      AND x_onchain->>'funder' IS NOT NULL
+    WHERE (x_close->'balance'->>'b')::int = 0
+      AND x_funder IS NOT NULL
 ), updates (scid, label, value) AS (
     SELECT scid, label, value FROM partial_updates
   UNION ALL
@@ -98,17 +98,16 @@ WITH matching AS (
 SELECT updates.*
 FROM updates
 INNER JOIN channels ON channels.short_channel_id = updates.scid
-WHERE channels.onchain->>(updates.label) IS NULL
     """,
         (scid,),
     )
     for scid, label, value in db.fetchall():
         print("    update", scid, label, "=", value)
         db.execute(
-            """
+            f"""
 UPDATE channels
-SET onchain = jsonb_set(onchain, ARRAY[%s::text], to_jsonb(%s::text))
+SET {label} = %s
 WHERE short_channel_id = %s
         """,
-            (label, value, scid),
+            (json.dumps(value), scid),
         )
