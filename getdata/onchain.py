@@ -84,7 +84,8 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
         else:
             f = bitcoin.getrawtransaction(spend["txid"], True)
             witness = f["vin"][spend["vin"]]["txinwitness"]
-            kinds.add("unknown")
+
+            kinds.add("unknown")  # default
             script = None
 
             if len(witness) == 2:
