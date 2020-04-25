@@ -11,7 +11,7 @@ def inspectblocks(db):
         with open("last_block") as f:
             blockheight = int(f.read())
     except:
-        blockheight = 505149
+        blockheight = 506425
 
     end_at_block = bitcoin.getblockchaininfo()["blocks"]
 

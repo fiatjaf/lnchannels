@@ -29,7 +29,7 @@
             htlc.offerer === channel.closer
               ? 'the one who closed'
               : "the one who didn't close"
-        } else if (channel.close.htlcs.a.length) {
+        } else if (channel.close.htlcs.length) {
           // this should never happen as a force-closed channel
           // will always have a known closer
           htlc.offerer = htlc.offerer === 'a' ? 'someone' : 'someone else'

@@ -62,8 +62,7 @@ CREATE TABLE IF NOT EXISTS nodealiases (
   pubkey text NOT NULL,
   alias text NOT NULL,
   color text,
-  first_seen timestamp NOT NULL,
-  last_seen timestamp NOT NULL
+  first_seen timestamp NOT NULL
 );
 CREATE INDEX IF NOT EXISTS index_pubkey ON nodealiases(pubkey);
 GRANT SELECT ON nodealiases TO web_anon;
@@ -71,8 +70,7 @@ GRANT SELECT ON nodealiases TO web_anon;
 CREATE TABLE IF NOT EXISTS features (
   pubkey text NOT NULL,
   features text NOT NULL,
-  first_seen timestamp NOT NULL,
-  last_seen timestamp NOT NULL
+  first_seen timestamp NOT NULL
 );
 GRANT SELECT ON features TO web_anon;
 
@@ -96,7 +94,7 @@ CREATE MATERIALIZED VIEW nodes AS
   ), nodealias AS (
     SELECT
       pubkey,
-      coalesce((SELECT alias FROM nodealiases AS n WHERE n.pubkey = p.pubkey ORDER BY last_seen DESC LIMIT 1), '') AS alias
+      coalesce((SELECT alias FROM nodealiases AS n WHERE n.pubkey = p.pubkey ORDER BY first_seen DESC LIMIT 1), '') AS alias
     FROM pubkeys AS p
     GROUP BY pubkey
   ), open AS (
@@ -319,6 +317,13 @@ CREATE OR REPLACE FUNCTION daemon (f features) RETURNS text AS $$
   )
   SELECT name FROM daemon
   WHERE featureset = f.features;
+$$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION uniq (list jsonb) RETURNS jsonb AS $$
+  WITH elements AS (
+    SELECT DISTINCT value FROM jsonb_array_elements_text(list)
+  )
+  SELECT jsonb_agg(value) FROM elements
 $$ LANGUAGE SQL STABLE;
 
 CREATE OR REPLACE FUNCTION node_channels (nodepubkey text)

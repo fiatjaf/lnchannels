@@ -15,7 +15,7 @@
       namePromise = new Promise(async (resolve, reject) => {
         let res = await (
           await fetch(
-            `/api/nodealiases?pubkey=eq.${pubkey}&select=alias&order=last_seen.desc`,
+            `/api/nodealiases?pubkey=eq.${pubkey}&select=alias&order=first_seen.desc`,
             {
               headers: {
                 'Range-Unit': 'items',

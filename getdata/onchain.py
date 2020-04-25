@@ -24,24 +24,6 @@ def onopen(db, blockheight: int, blocktime: int, tx: Dict, vout: Dict, ch: Dict)
         # },
     )
 
-    params = (
-        ch["short_channel_id"],
-        json.dumps([node0, node1]),
-        ch["satoshis"],
-        ch["last_update"],
-        json.dumps(
-            {
-                "block": blockheight,
-                "txid": tx["txid"],
-                "address": vout["scriptPubKey"]["addresses"][0],
-                "time": blocktime,
-                "fee": get_fee(tx),
-            }
-        ),
-        json.dumps({"funding": list(txs_funding)}),
-        ch["short_channel_id"],
-    )
-    print(params)
     db.execute(
         """
 WITH ins AS (
@@ -54,7 +36,23 @@ SET open = %s
   , txs = txs || %s
 WHERE short_channel_id = %s
         """,
-        params,
+        (
+            ch["short_channel_id"],
+            json.dumps([node0, node1]),
+            ch["satoshis"],
+            ch["last_update"],
+            json.dumps(
+                {
+                    "block": blockheight,
+                    "txid": tx["txid"],
+                    "address": vout["scriptPubKey"]["addresses"][0],
+                    "time": blocktime,
+                    "fee": get_fee(tx),
+                }
+            ),
+            json.dumps({"funding": list(txs_funding)}),
+            ch["short_channel_id"],
+        ),
     )
 
 
@@ -84,9 +82,6 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
         else:
             f = bitcoin.getrawtransaction(spend["txid"], True)
             witness = f["vin"][spend["vin"]]["txinwitness"]
-
-            kinds.add("unknown")  # default
-            script = None
 
             if len(witness) == 2:
                 # paying to a pubkey
@@ -194,24 +189,6 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
                 }
             )
 
-    params = (
-        json.dumps(
-            {
-                "block": blockheight,
-                "txid": tx["txid"],
-                "time": blocktime,
-                "fee": get_fee(tx),
-                "type": close_type,
-                "balance": balance,
-                "htlcs": htlcs,
-            }
-        ),
-        json.dumps({"a": list(txs["a"]), "b": list(txs["b"])}),
-        taken,
-        closer,
-        scid,
-    )
-    print(params)
     db.execute(
         """
 UPDATE channels
@@ -221,5 +198,21 @@ SET close = %s
   , closer = %s
 WHERE short_channel_id = %s
     """,
-        params,
+        (
+            json.dumps(
+                {
+                    "block": blockheight,
+                    "txid": tx["txid"],
+                    "time": blocktime,
+                    "fee": get_fee(tx),
+                    "type": close_type,
+                    "balance": balance,
+                    "htlcs": htlcs,
+                }
+            ),
+            json.dumps({"a": list(txs["a"]), "b": list(txs["b"])}),
+            taken,
+            closer,
+            scid,
+        ),
     )

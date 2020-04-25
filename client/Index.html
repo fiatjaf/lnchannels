@@ -130,7 +130,7 @@
 </div>
 
 <div>
-  <h4>epic crashes</h4>
+  <h4>big crashes</h4>
   <table id="crashed">
     <thead>
       <tr>
@@ -159,7 +159,7 @@
           </span>
           {:else if chan.close.type == 'force'}
           <span>
-            {#if chan.close.htlcs.a.length + chan.close.htlcs.b.length == 0}
+            {#if chan.close.htlcs.length == 0}
             <span>
               lived for
               <strong>{chan.close.block - chan.open.block}</strong>
@@ -168,11 +168,8 @@
             {/if}
             <strong>force-closed</strong>{#if chan.closer && chan.a}&nbsp; by
             <Alias pubkey="{chan.nodes[chan[chan.closer]]}" link />{/if}{#if
-            chan.close.htlcs.a.length + chan.close.htlcs.b.length >
-            0}&nbsp;leaving
-            <strong
-              >{chan.close.htlcs.a.length + chan.close.htlcs.b.length}</strong
-            >
+            chan.close.htlcs.length > 0}&nbsp;leaving
+            <strong>{chan.close.htlcs.length}</strong>
             HTLCs to be resolved{/if}.
           </span>
           {/if}

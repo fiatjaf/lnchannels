@@ -1,6 +1,6 @@
 import requests
 
-from .globals import bitcoin, ESPLORA
+from .globals import bitcoin
 
 
 def get_fee(tx):
@@ -26,6 +26,13 @@ def get_outspends(txid):
 
 
 def call_esplora(path):
-    r = requests.get(f"{ESPLORA}/{path}")
+    try:
+        r = requests.get("https://blockstream.info/api" + path)
+        if r.ok:
+            return r.json()
+    except requests.exceptions.ConnectionError:
+        pass
+
+    r = requests.get("https://mempool.space/electrs" + path)
     r.raise_for_status()
     return r.json()
