@@ -1,4 +1,3 @@
-import json
 import psycopg2
 from multiprocessing import Process
 
@@ -20,7 +19,7 @@ ORDER BY short_channel_id
         (MIN_CHANNEL,),
     )
     rows = db.fetchall()
-    groups = ([], [], [], [])
+    groups = ([], [], [], [], [])
     for (scid,) in rows:
         for g, group in enumerate(groups):
             if int(scid.split("x")[0]) % len(groups) == g:
@@ -155,5 +154,5 @@ UPDATE channels
 SET {label} = %s
 WHERE short_channel_id = %s
         """,
-            (json.dumps(value), scid),
+            (value, scid),
         )

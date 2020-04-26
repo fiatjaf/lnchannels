@@ -43,8 +43,6 @@ CREATE TABLE IF NOT EXISTS channels (
   last_update timestamp NOT NULL
 );
 
-ALTER TABLE channels DROP COLUMN onchain;
-
 CREATE INDEX IF NOT EXISTS index_scid ON channels(short_channel_id);
 CREATE INDEX IF NOT EXISTS index_nodes ON channels USING gin (nodes);
 CREATE INDEX IF NOT EXISTS index_open ON channels USING gin (open);
