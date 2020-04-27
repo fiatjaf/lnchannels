@@ -3,9 +3,9 @@ CREATE TABLE IF NOT EXISTS channels (
   nodes jsonb NOT NULL,
 
   -- node identification
-  a text,
-  b text,
-  funder text,
+  a int,
+  b int,
+  funder int,
 
   -- labeled sides
   closer text,

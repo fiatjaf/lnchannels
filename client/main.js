@@ -2,7 +2,7 @@
 
 window.H = window.Highcharts
 
-window.namePromises = {}
+window.aliasPromises = {}
 
 const main = document.querySelector('main')
 import App from './App.html'

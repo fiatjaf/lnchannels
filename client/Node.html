@@ -108,7 +108,9 @@
 
   onMount(async () => {
     aliases = await (
-      await fetch(`/api/nodealiases?pubkey=eq.${id}&select=first_seen,alias`)
+      await fetch(
+        `/api/nodealiases?pubkey=eq.${id}&select=first_seen,alias,color`
+      )
     ).json()
   })
 </script>
@@ -161,11 +163,12 @@
     {#if aliases.length > 0}
     <div>
       <h4>node names</h4>
-      <table>
+      <table style="margin-right: 23px;">
         <thead>
           <tr>
             <th>first seen</th>
             <th>alias</th>
+            <th>color</th>
           </tr>
         </thead>
         <tbody>
@@ -173,6 +176,16 @@
           <tr>
             <td>{date(alias.first_seen)}</td>
             <td>{alias.alias}</td>
+            {#if alias.color}
+            <td
+              style="background-color: #{alias.color}; color: #{alias.color}"
+              title="#{alias.color}"
+            >
+              <small>#{alias.color}</small>
+            </td>
+            {:else}
+            <td />
+            {/if}
           </tr>
           {/each}
         </tbody>

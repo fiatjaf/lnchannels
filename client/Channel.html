@@ -39,11 +39,12 @@
         return htlc
       })
     : []
-  $: closebalances = channel.a
-    ? channel.nodes
-        .map((_, idx) => (channel.a === idx ? 'a' : 'b'))
-        .map(letter => channel.close.balance[letter])
-    : null
+  $: closebalances =
+    typeof channel.a === 'number'
+      ? channel.nodes
+          .map((_, idx) => (channel.a === idx ? 'a' : 'b'))
+          .map(letter => channel.close.balance[letter])
+      : null
 
   const id = getContext('history')
     .location.pathname.split('/')
@@ -55,7 +56,9 @@
 
   onMount(async () => {
     let res = await (
-      await fetch(`/api/channels?short_channel_id=eq.${id}`)
+      await fetch(
+        `/api/channels?select=short_channel_id,nodes,satoshis,open,close,a,b,funder,closer,taken&short_channel_id=eq.${id}`
+      )
     ).json()
     if (res.length === 0) {
       notfound = true
@@ -75,6 +78,9 @@
       let policy = policies[i]
       ;[downwardpolicies, upwardpolicies][policy.direction].push(policy)
     }
+
+    downwardpolicies = downwardpolicies
+    upwardpolicies = upwardpolicies
   })
 </script>
 
@@ -141,9 +147,17 @@
           <tr>
             <td>
               {closebalances[0]} sat
+              <i
+                class="bar"
+                style="width:{100 * closebalances[0] / channel.satoshis}%; background: var(--blue)"
+              />
             </td>
             <td>
               {closebalances[1]} sat
+              <i
+                class="bar"
+                style="width:{100 * closebalances[1] / channel.satoshis}%; background: var(--blue)"
+              />
             </td>
           </tr>
           {/if}
@@ -208,7 +222,7 @@
   <h4>policy details</h4>
   <div style="display: flex">
     {#if upwardpolicies.length}
-    <table>
+    <table style="margin-right: 23px;">
       <caption>
         from
         <code>

@@ -62,6 +62,10 @@ $$ LANGUAGE SQL;
 CREATE FUNCTION pg_temp.matches (x jsonb, y jsonb) RETURNS boolean AS $$
   SELECT x ?| (SELECT array_agg(value) FROM jsonb_array_elements_text(y))
 $$ LANGUAGE SQL;
+
+CREATE FUNCTION pg_temp.index (arr jsonb, item text) RETURNS int AS $$
+  SELECT CASE WHEN arr->>0 = item THEN 0 ELSE 1 END
+$$ LANGUAGE SQL;
     """
     )
 
@@ -80,8 +84,14 @@ WITH matching AS (
   INNER JOIN channels AS y
      ON pg_temp.matches(x.nodes, y.nodes)
     AND NOT x.nodes = y.nodes
-), partial_updates (scid, label, value, other) AS (
-    SELECT x_scid, 'a', pg_temp.inter(x_nodes, y_nodes), pg_temp.diff(x_nodes, y_nodes)
+), singlebalance AS (
+  SELECT short_channel_id, nodes, a, funder, close
+  FROM channels
+  WHERE short_channel_id = %s
+    AND close->>'block' IS NOT NULL
+    AND (close->'balance'->>'b')::int = 0
+), updates (scid, label, value) AS (
+    SELECT x_scid, 'a', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
     FROM matching
     WHERE x_close->>'type' != 'penalty'
       AND pg_temp.matches(x_txs->'a',
@@ -90,7 +100,7 @@ WITH matching AS (
             coalesce(y_txs->'funding', '[]'::jsonb)
           )
   UNION
-    SELECT x_scid, 'b', pg_temp.inter(x_nodes, y_nodes), pg_temp.diff(x_nodes, y_nodes)
+    SELECT x_scid, 'b', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
     FROM matching
     WHERE x_close->>'type' != 'penalty'
       AND pg_temp.matches(x_txs->'b',
@@ -99,7 +109,7 @@ WITH matching AS (
             coalesce(y_txs->'funding', '[]'::jsonb)
           )
   UNION
-    SELECT x_scid, 'a', pg_temp.inter(x_nodes, y_nodes), pg_temp.inter(x_nodes, y_nodes)
+    SELECT x_scid, 'ab', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
     FROM matching
     WHERE x_close->>'type' = 'penalty'
       AND (
@@ -115,7 +125,7 @@ WITH matching AS (
           )
       )
   UNION
-    SELECT x_scid, 'funder', pg_temp.inter(x_nodes, y_nodes), NULL
+    SELECT x_scid, 'funder', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
     FROM matching
     WHERE pg_temp.matches(x_txs->'funding',
             coalesce(y_txs->'a', '[]'::jsonb) ||
@@ -123,36 +133,33 @@ WITH matching AS (
             coalesce(y_txs->'funding', '[]'::jsonb)
           )
   UNION
-    SELECT x_scid, 'a', x_a, (x_nodes - (x_a))->>0
-    FROM matching
-    WHERE (x_close->'balance'->>'b')::int = 0
-      AND x_a IS NOT NULL
+    SELECT short_channel_id, 'a', funder
+    FROM singlebalance
+    WHERE funder IS NOT NULL
   UNION
-    SELECT x_scid, 'funder', x_funder, (x_nodes - (x_funder))->>0
-    FROM matching
-    WHERE (x_close->'balance'->>'b')::int = 0
-      AND x_funder IS NOT NULL
-), updates (scid, label, value) AS (
-    SELECT scid, label, value FROM partial_updates
-  UNION ALL
-    SELECT scid, ('["a", "b"]'::jsonb - label)->>0, other
-    FROM partial_updates
-    WHERE label = 'a' OR label = 'b'
+    SELECT short_channel_id, 'funder', a
+    FROM singlebalance
+    WHERE a IS NOT NULL
 )
 
 SELECT updates.*
 FROM updates
 INNER JOIN channels ON channels.short_channel_id = updates.scid
     """,
-        (scid,),
+        (scid, scid,),
     )
     for scid, label, value in db.fetchall():
         print("update", scid, label, "=", value)
-        db.execute(
-            f"""
-UPDATE channels
-SET {label} = %s
-WHERE short_channel_id = %s
-        """,
-            (value, scid),
-        )
+
+        if label == "ab":
+            params = [("a", value), ("b", value)]
+        else:
+            params = [(label, value)]
+            if label in {"a", "b"}:
+                params.append((({"a", "b"} - {label}).pop(), 1 - value))
+
+        for label, value in params:
+            db.execute(
+                f"UPDATE channels SET {label} = %s WHERE short_channel_id = %s",
+                (value, scid),
+            )

@@ -6,16 +6,17 @@
   export let pubkey
   export let link = false
 
-  var namePromise = Promise.resolve(pubkey)
+  var el
+  var aliasPromise = Promise.resolve({alias: pubkey})
 
   $: if (pubkey !== '') {
-    if (pubkey in window.namePromises) {
-      namePromise = window.namePromises[pubkey]
+    if (pubkey in window.aliasPromises) {
+      aliasPromise = window.aliasPromises[pubkey]
     } else {
-      namePromise = new Promise(async (resolve, reject) => {
+      aliasPromise = new Promise(async (resolve, reject) => {
         let res = await (
           await fetch(
-            `/api/nodealiases?pubkey=eq.${pubkey}&select=alias&order=first_seen.desc`,
+            `/api/nodealiases?pubkey=eq.${pubkey}&select=alias,color&order=first_seen.desc`,
             {
               headers: {
                 'Range-Unit': 'items',
@@ -25,26 +26,52 @@
           )
         ).json()
 
-        if (res.length && res[0].alias != '') {
-          resolve(res[0].alias)
+        if (res.length === 0) {
+          reject('not found, someone please catch this')
           return
         }
 
-        reject('not found, someone please catch this')
+        console.log(res[0].color)
+        if (res[0].color) {
+          el.style.setProperty('--nodecolor', `#${res[0].color}`)
+        }
+
+        if (res.length && res[0].alias != '') {
+          resolve(res[0])
+          return
+        }
+
+        reject('should never happen')
       })
 
-      window.namePromises[pubkey] = namePromise
+      window.aliasPromises[pubkey] = aliasPromise
     }
   }
+  $: namePromise = aliasPromise.then(a => a.alias)
 </script>
 
+<style>
+  .name::after {
+    content: ' ';
+    transition: color 300ms linear;
+    border-radius: 85px;
+    display: inline-block;
+    margin-left: 4px;
+    height: 9px;
+    width: 9px;
+    position: relative;
+    top: 1px;
+    background: var(--nodecolor);
+  }
+</style>
+
 {#if link}
-<a href="/node/{pubkey}">
+<a href="/node/{pubkey}" class="name" bind:this="{el}">
   {#await namePromise}{pubkey}{:then name}{name}{:catch
   error}{abbr(pubkey)}{/await}
 </a>
 {:else}
-<span>
+<span class="name" bind:this="{el}">
   {#await namePromise}{pubkey}{:then name}{name}{:catch
   error}{abbr(pubkey)}{/await}
 </span>
