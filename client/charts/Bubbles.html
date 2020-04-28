@@ -21,20 +21,23 @@
           y: chan.satoshis,
           z: chan.peer.size,
           name: chan.peer.name,
+          color: '#' + chan.peer.color,
           scid: chan.short_channel_id
         })
       }
     }
 
+    console.log(bubbledata)
+
     // channel bubbles
     chart = H.chart(el, {
+      colors: [],
       title: {text: ''},
       yAxis: [{title: {text: 'channel size (sat)', enabled: null}, floor: 0}],
       series: [
         {
           type: 'bubble',
           data: bubbledata,
-          marker: {fillColor: 'var(--gold)'},
           showInLegend: false,
           minSize: '1%',
           maxSize: '30%',

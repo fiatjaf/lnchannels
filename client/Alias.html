@@ -5,6 +5,12 @@
 
   export let pubkey
   export let link = false
+  export let alias = null
+  export let color = null
+
+  if (alias) {
+    window.aliasPromises[pubkey] = Promise.resolve({alias, color})
+  }
 
   var el
   var aliasPromise = Promise.resolve({alias: pubkey})
@@ -31,11 +37,6 @@
           return
         }
 
-        console.log(res[0].color)
-        if (res[0].color) {
-          el.style.setProperty('--nodecolor', `#${res[0].color}`)
-        }
-
         if (res.length && res[0].alias != '') {
           resolve(res[0])
           return
@@ -47,7 +48,16 @@
       window.aliasPromises[pubkey] = aliasPromise
     }
   }
-  $: namePromise = aliasPromise.then(a => a.alias)
+
+  $: namePromise = aliasPromise
+    .then(a => a.alias)
+    .then(name => (name !== '' ? name : abbr(pubkey)))
+
+  $: aliasPromise.then(a => {
+    if (a.color) {
+      el.style.setProperty('--nodecolor', `#${a.color}`)
+    }
+  })
 </script>
 
 <style>

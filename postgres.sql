@@ -90,11 +90,13 @@ CREATE MATERIALIZED VIEW nodes AS
         SELECT nodes->>1 AS pubkey FROM channels
     )x
   ), nodealias AS (
-    SELECT
-      pubkey,
-      coalesce((SELECT alias FROM nodealiases AS n WHERE n.pubkey = p.pubkey ORDER BY first_seen DESC LIMIT 1), '') AS alias
+    SELECT DISTINCT ON (pubkey)
+      p.pubkey,
+      coalesce(n.alias, '') AS alias,
+      n.color AS color
     FROM pubkeys AS p
-    GROUP BY pubkey
+    LEFT OUTER JOIN nodealiases AS n ON n.pubkey = p.pubkey
+    ORDER BY p.pubkey, n.first_seen DESC
   ), open AS (
     SELECT pubkey, count(*) AS openchannels, sum(satoshis) AS capacity FROM (
         SELECT nodes->>0 AS pubkey, * FROM channels
@@ -118,7 +120,8 @@ CREATE MATERIALIZED VIEW nodes AS
   )
   SELECT
     agg.pubkey AS pubkey,
-    coalesce(nodealias.alias, '') AS alias,
+    nodealias.alias AS alias,
+    nodealias.color AS color,
     agg.oldestchannel AS oldestchannel,
     coalesce(open.openchannels, 0) AS openchannels,
     agg.closedchannels AS closedchannels,
@@ -337,16 +340,10 @@ RETURNS TABLE (
   SELECT
     channels.short_channel_id,
     jsonb_build_object(
-      'id',
-        (nodes - nodepubkey)->>0,
-      'name',
-        coalesce(
-          (SELECT alias FROM nodes WHERE pubkey = ((nodes - nodepubkey)->>0)
-        ), ''),
-      'size',
-        coalesce(
-          (SELECT capacity FROM nodes WHERE pubkey = ((nodes - nodepubkey)->>0)
-        ), 0)
+      'id', peer.pubkey,
+      'name', peer.alias,
+      'color', peer.color,
+      'size', peer.capacity
     ) AS peer,
     open,
     close,
@@ -368,6 +365,7 @@ RETURNS TABLE (
         split_part(p_in.delay, '~', 2)::int
     ) AS in
   FROM channels
+  LEFT OUTER JOIN nodes AS peer ON peer.pubkey = (nodes - nodepubkey)->>0
   LEFT OUTER JOIN (
     SELECT
       short_channel_id,

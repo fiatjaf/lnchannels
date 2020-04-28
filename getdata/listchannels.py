@@ -14,10 +14,24 @@ def listchannels(db):
         SPARK_URL, headers={"X-Access": SPARK_TOKEN}, json={"method": "listchannels"}
     )
 
-    db.execute("SELECT short_channel_id, last_update FROM channels")
+    db.execute("SELECT short_channel_id, last_update, open FROM channels")
+    rows = db.fetchall()
     channel_last_update_by_scid: Dict[str, int] = {
-        scid: int(last_update.timestamp()) for scid, last_update in db.fetchall()
+        scid: int(last_update.timestamp()) for scid, last_update, _ in rows
     }
+
+    for scid, _, ch_open in tqdm(rows, leave=True, desc="filling blanks"):
+        if (
+            not ch_open["block"]
+            or not ch_open["fee"]
+            or not ch_open["txid"]
+            or not ch_open["time"]
+        ):
+            # channel with insufficient onchain data
+            blockheight, tx_index, out_n = map(int, scid.split("x"))
+            block = bitcoin.getblock(bitcoin.getblockhash(blockheight))
+            tx = bitcoin.getrawtransaction(block["tx"][tx_index], True)
+            onopen(db, blockheight, block["time"], tx, tx["vout"][out_n], scid, None)
 
     pbar = tqdm(r.json()["channels"], leave=True, desc="listchannels")
     for ch in pbar:
@@ -35,7 +49,15 @@ def listchannels(db):
             # gather onchain data
             block = bitcoin.getblock(bitcoin.getblockhash(blockheight))
             tx = bitcoin.getrawtransaction(block["tx"][tx_index], True)
-            onopen(db, blockheight, block["time"], tx, tx["vout"][out_n], ch)
+            onopen(
+                db,
+                blockheight,
+                block["time"],
+                tx,
+                tx["vout"][out_n],
+                ch["short_channel_id"],
+                ch,
+            )
 
         if last_update < ch["last_update"]:
             # update policies

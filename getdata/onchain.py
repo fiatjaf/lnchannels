@@ -5,54 +5,55 @@ from .utils import get_fee, get_outspends
 from .globals import bitcoin
 
 
-def onopen(db, blockheight: int, blocktime: int, tx: Dict, vout: Dict, ch: Dict):
-    node0, node1, towards = (
-        (ch["source"], ch["destination"], 1)
-        if ch["source"] < ch["destination"]
-        else (ch["destination"], ch["source"], 0)
-    )
+def onopen(
+    db,
+    blockheight: int,
+    blocktime: int,
+    tx: Dict,
+    vout: Dict,
+    short_channel_id: str,
+    ch: Dict,
+):
+    open_data = {
+        "block": blockheight,
+        "txid": tx["txid"],
+        "address": vout["scriptPubKey"]["addresses"][0],
+        "time": blocktime,
+        "fee": get_fee(tx),
+    }
 
-    txs_funding = set.union(
-        # txs that contributed inputs for the channel funding
-        {v["txid"] for v in tx["vin"]},
-        # TODO change outputs from the channel creation
-        # (must revisit this later to add more stuff?)
-        # {
-        #     s["txid"]
-        #     for i, s in enumerate(get_outspends(tx["txid"]))
-        #     if i != vout["n"] and s["spent"]
-        # },
-    )
+    txs_funding = set.union({v["txid"] for v in tx["vin"]},)
+    txs = {"funding": list(txs_funding)}
+
+    if ch:
+        node0, node1, towards = (
+            (ch["source"], ch["destination"], 1)
+            if ch["source"] < ch["destination"]
+            else (ch["destination"], ch["source"], 0)
+        )
+
+        db.execute(
+            """
+INSERT INTO channels (short_channel_id, nodes, satoshis, last_update)
+VALUES (%s, %s, %s, to_timestamp(%s))
+ON CONFLICT (short_channel_id) DO NOTHING
+        """,
+            (
+                short_channel_id,
+                json.dumps([node0, node1]),
+                ch["satoshis"],
+                ch["last_update"],
+            ),
+        )
 
     db.execute(
         """
-WITH ins AS (
-  INSERT INTO channels (short_channel_id, nodes, satoshis, last_update)
-  VALUES (%s, %s, %s, to_timestamp(%s))
-  ON CONFLICT (short_channel_id) DO NOTHING
-)
 UPDATE channels
 SET open = %s
   , txs = txs || %s
 WHERE short_channel_id = %s
         """,
-        (
-            ch["short_channel_id"],
-            json.dumps([node0, node1]),
-            ch["satoshis"],
-            ch["last_update"],
-            json.dumps(
-                {
-                    "block": blockheight,
-                    "txid": tx["txid"],
-                    "address": vout["scriptPubKey"]["addresses"][0],
-                    "time": blocktime,
-                    "fee": get_fee(tx),
-                }
-            ),
-            json.dumps({"funding": list(txs_funding)}),
-            ch["short_channel_id"],
-        ),
+        (json.dumps(open_data), json.dumps(txs), short_channel_id),
     )
 
 

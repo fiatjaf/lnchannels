@@ -35,7 +35,7 @@
     stats = await getContext('stats')
     topnodes = await (
       await fetch(
-        `/api/nodes?openchannels=gt.0&select=pubkey,alias,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity&order=openchannels.desc`,
+        `/api/nodes?openchannels=gt.0&select=pubkey,alias,color,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity&order=openchannels.desc`,
         {
           headers: {
             'Range-Unit': 'items',
@@ -91,36 +91,31 @@
       {#each topnodes as node}
       <tr>
         <td>
-          <a href="/node/{node.pubkey}"
-            >{#if node.alias}{node.alias}{:else}{abbr(node.pubkey)}{/if}</a
-          >
+          <Alias
+            link
+            pubkey="{node.pubkey}"
+            alias="{node.alias}"
+            color="{node.color}"
+          />
         </td>
         <td>
           {node.openchannels}
-          <i
-            class="bar"
-            style="width:{100 * node.nopen / stats.max_node_openchannels}%; background: var(--gold)"
-          />
         </td>
         <td>
           {node.openchannels + node.closedchannels}
           <i
             class="bar"
-            style="width:{100 * (node.openchannels+ node.closedchannels) / stats.max_node_allchannels}%; background: var(--orange)"
+            style="width:{100 * (node.openchannels+ node.closedchannels) / stats.max_node_allchannels}%; background: var(--blue)"
           />
         </td>
         <td>
           {(100 * node.closedchannels / node.openchannels).toFixed(0)}
-          <i
-            class="bar"
-            style="width:{100 * (100 * node.closedchannels/ node.openchannels) / stats.max_node_close_rate}%; background: var(--orange)"
-          />
         </td>
         <td>
           {(node.avg_duration).toFixed()}
           <i
             class="bar"
-            style="width:{100 * node.avg_duration / stats.max_node_average_duration}%; background: var(--gold)"
+            style="width:{100 * node.avg_duration / stats.max_node_average_duration}%; background: var(--green)"
           />
         </td>
       </tr>

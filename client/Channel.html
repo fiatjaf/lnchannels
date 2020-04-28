@@ -149,14 +149,14 @@
               {closebalances[0]} sat
               <i
                 class="bar"
-                style="width:{100 * closebalances[0] / channel.satoshis}%; background: var(--blue)"
+                style="width:{100 * closebalances[0] / channel.satoshis}%; background: var(--gold)"
               />
             </td>
             <td>
               {closebalances[1]} sat
               <i
                 class="bar"
-                style="width:{100 * closebalances[1] / channel.satoshis}%; background: var(--blue)"
+                style="width:{100 * closebalances[1] / channel.satoshis}%; background: var(--gold)"
               />
             </td>
           </tr>
@@ -171,12 +171,12 @@
         blocks
         <i
           class="bar"
-          style="width:{100 * (channel.close.block - channel.open.block) / stats.max_channel_duration}%; background: var(--gold)"
+          style="width:{100 * (channel.close.block - channel.open.block) / stats.max_channel_duration}%; background: var(--green)"
         />
         {:else} {stats.last_block - channel.open.block} blocks and counting
         <i
           class="bar"
-          style="width:{100 * (stats.last_block - channel.open.block) / stats.max_channel_duration}%; background: var(--gold)"
+          style="width:{100 * (stats.last_block - channel.open.block) / stats.max_channel_duration}%; background: var(--green)"
         />
         {/if}
       </td>
@@ -222,7 +222,7 @@
   <h4>policy details</h4>
   <div style="display: flex">
     {#if upwardpolicies.length}
-    <table style="margin-right: 23px;">
+    <table>
       <caption>
         from
         <code>

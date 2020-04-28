@@ -4,6 +4,7 @@
   import {onMount, getContext} from 'svelte'
   import {abbr, date} from './helpers'
   import NotFound from './NotFound.html'
+  import Alias from './Alias.html'
   import NodeHistory from './charts/NodeHistory.html'
   import Bubbles from './charts/Bubbles.html'
   import Loader from './Loader.html'
@@ -56,7 +57,7 @@
   onMount(async () => {
     aliases = await (
       await fetch(
-        `/api/nodealiases?pubkey=eq.${id}&select=first_seen,alias,color`
+        `/api/nodealiases?pubkey=eq.${id}&select=first_seen,alias,color&order=first_seen.desc`
       )
     ).json()
   })
@@ -70,9 +71,6 @@
     display: none;
   }
 
-  #channels-bubble .highcharts-point {
-    fill: var(--gold);
-  }
   #channels-bubble .highcharts-point,
   #channels-bubble .highcharts-data-label {
     cursor: pointer;
@@ -201,11 +199,13 @@
           id="ch-{channel.short_channel_id}"
           class:closed="{channel.close.block > 0}"
         >
-          <td data-size="{channel.peer.size}">
-            <a href="/node/{channel.peer.id}">
-              {#if channel.peer.name} {channel.peer.name} {:else}
-              {abbr(channel.peer.id)} {/if}
-            </a>
+          <td>
+            <Alias
+              link
+              pubkey="{channel.peer.id}"
+              alias="{channel.peer.name}"
+              color="{channel.peer.color}"
+            />
           </td>
           <td>
             <a href="/channel/{channel.short_channel_id}">
@@ -255,7 +255,7 @@
     </table>
   </div>
   {:else}
-  <Loader size="320" color="var(--orange)" />
+  <Loader />
   {/if}
 </div>
 {/if}

@@ -1,9 +1,8 @@
 import psycopg2
+import random
 from multiprocessing import Process
 
 from .globals import POSTGRES_URL
-
-MIN_CHANNEL = "585298x3101x1"
 
 
 def chain_analysis(db):
@@ -11,14 +10,16 @@ def chain_analysis(db):
         """
 SELECT short_channel_id
 FROM channels
-WHERE short_channel_id > %s
-  AND close->>'block' IS NOT NULL
+WHERE close->>'block' IS NOT NULL
   AND (a IS NULL OR funder IS NULL)
 ORDER BY short_channel_id
-    """,
-        (MIN_CHANNEL,),
+    """
     )
-    rows = db.fetchall()
+
+    # this is not urgent work, but very demanding, split it across 20 days avg
+    rows = [row for row in db.fetchall() if random.random() < 0.05]
+
+    # also split it into 5 groups which we will put in 5 different processes
     groups = ([], [], [], [], [])
     for (scid,) in rows:
         for g, group in enumerate(groups):
