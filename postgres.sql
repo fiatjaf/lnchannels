@@ -135,15 +135,17 @@ CREATE MATERIALIZED VIEW nodes AS
 CREATE INDEX IF NOT EXISTS index_node ON nodes(pubkey);
 GRANT SELECT ON nodes TO web_anon;
 
+CREATE MATERIALIZED VIEW last_block AS
+  SELECT max(b) AS last_block
+  FROM (
+      SELECT max((open->>'block')::int) AS b FROM channels
+    UNION ALL
+      SELECT max((close->>'block')::int) AS b FROM channels
+  )x;
+GRANT SELECT on last_block TO web_anon;
+
 CREATE MATERIALIZED VIEW globalstats AS
-  WITH last_block AS (
-    SELECT max(b) AS last_block
-    FROM (
-        SELECT max((open->>'block')::int) AS b FROM channels
-      UNION ALL
-        SELECT max((close->>'block')::int) AS b FROM channels
-    )x
-  ), channels AS (
+  WITH channels AS (
     SELECT
       max(CASE WHEN close->>'block' IS NULL
         THEN (close->>'block')::int
@@ -263,19 +265,30 @@ RETURNS TABLE (
   ORDER BY blockgroup
 $$ LANGUAGE SQL STABLE;
 
+-- channel age function that works both for closed and open channels
+CREATE OR REPLACE FUNCTION age (c channels) RETURNS bigint AS $$
+  SELECT
+    CASE
+      WHEN c.close->>'block' IS NULL THEN -- open
+        (SELECT last_block FROM last_block) - (c.open->>'block')::bigint
+      ELSE -- closed
+        (c.close->>'block')::bigint - (c.open->>'block')::bigint
+    END
+$$ LANGUAGE SQL STABLE;
+
 -- assess how much a channel closure was bad
 CREATE OR REPLACE FUNCTION crash (c channels) RETURNS bigint AS $$
   SELECT
     CASE
       WHEN c.close->>'type' = 'penalty' THEN
-        (c.close->'balance'->>(c.taken))::int / 7000
+        (c.close->'balance'->>(c.taken))::int / 6000
       WHEN c.close->>'type' = 'force' THEN
         10
         + (SELECT
              sum(CASE WHEN value->>'offerer' = c.closer THEN 16 ELSE 8 END)
            FROM jsonb_array_elements(c.close->'htlcs'))
         + (CASE WHEN (c.close->'balance'->>'b')::int = 0 THEN 7 ELSE 0 END)
-        + (144 * 10
+        + (144 * 5
           / ((c.close->>'block')::int - (c.open->>'block')::int))
       ELSE 0
     END

@@ -20,7 +20,7 @@
   onMount(async () => {
     longestliving = await (
       await fetch(
-        `/api/channels?close->>block=not.is.NULL&order=open->>block.asc`,
+        `/api/channels?select=age,short_channel_id,nodes,opened_at:open->>block,closed_at:close->>block,satoshis&order=age.desc`,
         {
           headers: {
             'Range-Unit': 'item',
@@ -190,7 +190,7 @@
     </thead>
     <tbody>
       {#each longestliving as chan}
-      <tr>
+      <tr class:closed="{chan.closed_at}">
         <td>
           <a href="/channel/{chan.short_channel_id}">{chan.short_channel_id}</a>
         </td>
@@ -201,7 +201,7 @@
             style="width:{100 * chan.satoshis / stats.max_channel_satoshis}%; background: var(--gold)"
           />
         </td>
-        <td>{chan.open.block}</td>
+        <td>{chan.opened_at}</td>
         <td>
           <Alias pubkey="{chan.nodes[0]}" link />
         </td>
@@ -209,10 +209,10 @@
           <Alias pubkey="{chan.nodes[1]}" link />
         </td>
         <td>
-          {stats.last_block - chan.open.block}
+          {chan.age}
           <i
             class="bar"
-            style="width:{100 * chan.duration / stats.max_channel_duration}%; background: var(--gold)"
+            style="width:{100 * chan.age / stats.max_channel_duration}%; background: var(--gold)"
           />
         </td>
       </tr>
