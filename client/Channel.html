@@ -19,7 +19,8 @@
 
   $: htlcs = channel.close.htlcs
     ? channel.close.htlcs.map((htlc, i) => {
-        if (channel.a) {
+        if (channel.a !== null) {
+          htlc.known = true
           htlc.offerer =
             channel.nodes[
               htlc.fulfilled ? channel[htlc.offerer] : 1 - channel[htlc.offerer]
@@ -34,6 +35,7 @@
           // will always have a known closer
           htlc.offerer = htlc.offerer === 'a' ? 'someone' : 'someone else'
         } else {
+          // also should never happen
           htlc.offerer = 'unknown'
         }
         return htlc
@@ -118,7 +120,7 @@
     <tr>
       <th>funder</th>
       <td>
-        <Alias pubkey="{channel.nodes[channel.funder]}" />
+        <Alias link pubkey="{channel.nodes[channel.funder]}" />
       </td>
     </tr>
 
@@ -192,7 +194,7 @@
     <tr>
       <th>force closer</th>
       <td>
-        <Alias pubkey="{channel.nodes[channel[channel.closer]]}" />
+        <Alias link pubkey="{channel.nodes[channel[channel.closer]]}" />
       </td>
     </tr>
     {/if} {#if htlcs.length}
@@ -207,9 +209,13 @@
           </tr>
           {#each htlcs as htlc}
           <tr>
-            <td>{htlc.offerer}</td>
+            <td>
+              {#if htlc.known}
+              <Alias link pubkey="{htlc.offerer}" />
+              {:else} {htlc.offerer} {/if}
+            </td>
             <td>{htlc.amount}</td>
-            <td>{#if htlc.fulfilled}fulfill{:else}timeout{/if}</td>
+            <td>{#if htlc.fulfilled}🗸 fulfill{:else}𐄂 timeout{/if}</td>
           </tr>
           {/each}
         </table>
@@ -226,7 +232,7 @@
       <caption>
         from
         <code>
-          <Alias pubkey="{channel.nodes[0]}" />
+          <Alias link pubkey="{channel.nodes[0]}" />
         </code>
       </caption>
       <thead>
@@ -253,7 +259,7 @@
       <caption>
         from
         <code>
-          <Alias pubkey="{channel.nodes[1]}" />
+          <Alias link pubkey="{channel.nodes[1]}" />
         </code>
       </caption>
       <thead>
