@@ -43,9 +43,35 @@
     : []
   $: closebalances =
     typeof channel.a === 'number'
-      ? channel.nodes
-          .map((_, idx) => (channel.a === idx ? 'a' : 'b'))
-          .map(letter => channel.close.balance[letter])
+      ? channel.close.type === 'penalty'
+        ? // a == b, closer had his balance taken
+          channel.nodes
+            .map((_, idx) =>
+              idx === channel.a
+                ? {
+                    letter: 1 - ['a', 'b'].indexOf(channel.closer),
+                    taken: false,
+                    color: 'gold'
+                  }
+                : {
+                    letter: channel.closer,
+                    taken: true,
+                    color: 'orange'
+                  }
+            )
+            .map(balance => ({
+              ...balance,
+              sat: channel.close.balance[balance.letter]
+            }))
+        : // normal - one node is a, the other is b
+          channel.nodes
+            .map((_, idx) => (channel.a === idx ? 'a' : 'b'))
+            .map(letter => ({sat: channel.close.balance[letter], letter}))
+            .map(balance => ({
+              ...balance,
+              color: 'gold',
+              taken: false
+            }))
       : null
 
   const id = getContext('history')
@@ -59,7 +85,7 @@
   onMount(async () => {
     let res = await (
       await fetch(
-        `/api/channels?select=short_channel_id,nodes,satoshis,open,close,a,b,funder,closer,taken&short_channel_id=eq.${id}`
+        `/api/channels?select=short_channel_id,nodes,satoshis,open,close,a,b,funder,closer&short_channel_id=eq.${id}`
       )
     ).json()
     if (res.length === 0) {
@@ -85,6 +111,20 @@
     upwardpolicies = upwardpolicies
   })
 </script>
+
+<style>
+  td.pubkey {
+    max-width: 190px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .pubkey a:not(:hover) .full {
+    display: none;
+  }
+  .pubkey a:hover .abbr {
+    display: none;
+  }
+</style>
 
 <svelte:head>
   <title>channel {channel.short_channel_id}</title>
@@ -130,37 +170,33 @@
       <td>
         <table>
           <tr>
+            {#each channel.nodes as pubkey}
             <td>
-              <Alias pubkey="{channel.nodes[0]}" />
+              <Alias pubkey="{pubkey}" />
             </td>
-            <td>
-              <Alias pubkey="{channel.nodes[1]}" />
-            </td>
+            {/each}
           </tr>
           <tr>
-            <td>
-              <a href="/node/{channel.nodes[0]}">{abbr(channel.nodes[0])}</a>
+            {#each channel.nodes as pubkey}
+            <td class="pubkey">
+              <a href="/node/{pubkey}">
+                <span class="abbr">{abbr(pubkey)}</span>
+                <span class="full">{pubkey}</span>
+              </a>
             </td>
-            <td>
-              <a href="/node/{channel.nodes[1]}">{abbr(channel.nodes[1])}</a>
-            </td>
+            {/each}
           </tr>
           {#if closebalances}
           <tr>
+            {#each closebalances as balance}
             <td>
-              {closebalances[0]} sat
+              {balance.sat} sat {#if balance.taken}taken{/if}
               <i
                 class="bar"
-                style="width:{100 * closebalances[0] / channel.satoshis}%; background: var(--gold)"
+                style="width:{100 * balance.sat / channel.satoshis}%; background: var(--{balance.color})"
               />
             </td>
-            <td>
-              {closebalances[1]} sat
-              <i
-                class="bar"
-                style="width:{100 * closebalances[1] / channel.satoshis}%; background: var(--gold)"
-              />
-            </td>
+            {/each}
           </tr>
           {/if}
         </table>

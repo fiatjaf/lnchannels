@@ -49,7 +49,7 @@
   onMount(async () => {
     crashed = await (
       await fetch(
-        `/api/channels?select=crash,short_channel_id,nodes,open,close,closer,taken,a,b,satoshis&crash=gt.0&order=crash.desc`,
+        `/api/channels?select=crash,short_channel_id,nodes,open,close,closer,a,b,satoshis&crash=gt.0&order=crash.desc`,
         {
           headers: {
             'Range-Unit': 'items',
@@ -148,9 +148,9 @@
           <span>
             closed with a
             <strong>penalty</strong> that has taken
-            <strong>{chan.close.balance[chan.taken]}</strong>
-            sat{#if chan.taken && chan.a}&nbsp;from
-            <Alias pubkey="{chan.nodes[chan[chan.taken]]}" link />{/if}.
+            <strong>{chan.close.balance[chan.closer]}</strong>
+            sat{#if chan.a}&nbsp;from
+            <Alias pubkey="{chan.nodes[1 - chan.a]}" link />{/if}.
           </span>
           {:else if chan.close.type == 'force'}
           <span>

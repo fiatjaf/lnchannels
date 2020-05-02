@@ -64,7 +64,6 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
     htlc_list = []
     balance = {"a": 0, "b": 0}
     htlcs = []
-    taken = None
     closer = None
     close_type = "unknown"
 
@@ -110,20 +109,19 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
                         if next_spend["spent"]:
                             txs[side].add(next_spend["txid"])
 
+                    # in case of a delayed output, we know this was the force-closer
+                    # and also the side that got taken
+                    closer = side
+
                     if witness[-2] == "01":
                         kinds.add("penalty")
                         # we keep treating this as if 'a' and 'b' were different
                         # but we'll know later they're the same node.
                         # we can't ever know who was the "closer" here
                         # as both 'a' and 'b' outputs will go to the same peer.
-
-                        # however we do mark the side that was appropriated
-                        taken = side
                     else:
                         kinds.add("delayed")
 
-                        # in case of a delayed output, we know this was the force-closer
-                        closer = side
                 else:
                     # paying to a custom address, means the same as a pubkey
                     # (it's anything the peer wants to spend to either in a
@@ -195,7 +193,6 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
 UPDATE channels
 SET close = %s
   , txs = txs || %s
-  , taken = %s
   , closer = %s
 WHERE short_channel_id = %s
     """,
@@ -212,7 +209,6 @@ WHERE short_channel_id = %s
                 }
             ),
             json.dumps({"a": list(txs["a"]), "b": list(txs["b"])}),
-            taken,
             closer,
             scid,
         ),

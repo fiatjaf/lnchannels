@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS channels (
 
   -- labeled sides
   closer text,
-  taken text,
 
   open jsonb NOT NULL DEFAULT '{
     "block": null,
@@ -281,7 +280,7 @@ CREATE OR REPLACE FUNCTION crash (c channels) RETURNS bigint AS $$
   SELECT
     CASE
       WHEN c.close->>'type' = 'penalty' THEN
-        (c.close->'balance'->>(c.taken))::int / 6000
+        (c.close->'balance'->>(('["a", "b"]'::jsonb - c.closer)->>0))::int / 1000
       WHEN c.close->>'type' = 'force' THEN
         10
         + (SELECT
