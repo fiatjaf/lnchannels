@@ -53,15 +53,17 @@
     .then(a => a.alias)
     .then(name => (name !== '' ? name : abbr(pubkey)))
 
+  var hasColor = false
   $: aliasPromise.then(a => {
     if (a.color) {
       el.style.setProperty('--nodecolor', `#${a.color}`)
+      hasColor = true
     }
   })
 </script>
 
 <style>
-  .name::after {
+  .colored::after {
     content: ' ';
     transition: color 300ms linear;
     border-radius: 85px;
@@ -76,12 +78,12 @@
 </style>
 
 {#if link}
-<a href="/node/{pubkey}" class="name" bind:this="{el}"
+<a href="/node/{pubkey}" class:colored="{hasColor}" bind:this="{el}"
   >{#await namePromise}{pubkey}{:then name}{name}{:catch
   error}{abbr(pubkey)}{/await}</a
 >
 {:else}
-<span class="name" bind:this="{el}"
+<span class:colored="{hasColor}" bind:this="{el}"
   >{#await namePromise}{pubkey}{:then name}{name}{:catch
   error}{abbr(pubkey)}{/await}</span
 >
