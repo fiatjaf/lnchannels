@@ -41,6 +41,12 @@
         return htlc
       })
     : []
+  $: closerpubkey =
+    channel.closer &&
+    typeof channel.a === 'number' &&
+    (channel.close.type === 'penalty'
+      ? channel.nodes[1 - channel.a]
+      : channel.nodes[channel[channel.closer]])
   $: closebalances =
     typeof channel.a === 'number'
       ? channel.close.type === 'penalty'
@@ -61,7 +67,7 @@
             )
             .map(balance => ({
               ...balance,
-              sat: channel.close.balance[balance.letter]
+              sat: channel.close.balance[balance.letter] || 0
             }))
         : // normal - one node is a, the other is b
           channel.nodes
@@ -118,10 +124,10 @@
     white-space: pre-wrap;
     word-break: break-all;
   }
-  .pubkey a:not(:hover) .full {
+  .pubkey:not(:hover) .full {
     display: none;
   }
-  .pubkey a:hover .abbr {
+  .pubkey:hover .abbr {
     display: none;
   }
 </style>
@@ -226,11 +232,11 @@
         {channel.close.type} {#if channel.close.balance.b == 0}(unused){/if}
       </td>
     </tr>
-    {/if} {#if channel.closer && channel.a}
+    {/if} {#if closerpubkey}
     <tr>
       <th>force closer</th>
       <td>
-        <Alias link pubkey="{channel.nodes[channel[channel.closer]]}" />
+        <Alias link pubkey="{closerpubkey}" />
       </td>
     </tr>
     {/if} {#if htlcs.length}

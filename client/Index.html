@@ -149,7 +149,7 @@
             closed with a
             <strong>penalty</strong> that has taken
             <strong>{chan.close.balance[chan.closer]}</strong>
-            sat{#if chan.a}&nbsp;from
+            sat{#if typeof chan.a === 'number'}&nbsp;from
             <Alias pubkey="{chan.nodes[1 - chan.a]}" link />{/if}.
           </span>
           {:else if chan.close.type == 'force'}

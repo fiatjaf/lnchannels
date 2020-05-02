@@ -76,13 +76,13 @@
 </style>
 
 {#if link}
-<a href="/node/{pubkey}" class="name" bind:this="{el}">
-  {#await namePromise}{pubkey}{:then name}{name}{:catch
-  error}{abbr(pubkey)}{/await}
-</a>
+<a href="/node/{pubkey}" class="name" bind:this="{el}"
+  >{#await namePromise}{pubkey}{:then name}{name}{:catch
+  error}{abbr(pubkey)}{/await}</a
+>
 {:else}
-<span class="name" bind:this="{el}">
-  {#await namePromise}{pubkey}{:then name}{name}{:catch
-  error}{abbr(pubkey)}{/await}
-</span>
+<span class="name" bind:this="{el}"
+  >{#await namePromise}{pubkey}{:then name}{name}{:catch
+  error}{abbr(pubkey)}{/await}</span
+>
 {/if}
