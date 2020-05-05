@@ -91,6 +91,7 @@ WITH matching AS (
   WHERE short_channel_id = %s
     AND close->>'block' IS NOT NULL
     AND (close->'balance'->>'b')::int = 0
+    AND close->>'type' != 'penalty'
 ), updates (scid, label, value) AS (
     SELECT x_scid, 'a', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
     FROM matching
@@ -136,11 +137,11 @@ WITH matching AS (
   UNION
     SELECT short_channel_id, 'a', funder
     FROM singlebalance
-    WHERE funder IS NOT NULL
+    WHERE funder IS NOT NULL AND a IS NULL
   UNION
     SELECT short_channel_id, 'funder', a
     FROM singlebalance
-    WHERE a IS NOT NULL
+    WHERE a IS NOT NULL AND funder IS NULL
 )
 
 SELECT updates.*

@@ -15,11 +15,11 @@ def inspectblocks(db):
 
     end_at_block = bitcoin.getblockchaininfo()["blocks"]
 
-    if blockheight > end_at_block - 7 * 144:
+    if blockheight > end_at_block - 14 * 144:
         # if we've reached the end and are up to speed with the blockchain
-        # reinspect the last 7 days so we catch closes from new channels
-        # we might had not seen in the last (7?) scans
-        blockheight = end_at_block - 7 * 144
+        # reinspect the last days so we catch closes (and new spends) from new channels
+        # we might had not seen in the last scans
+        blockheight = end_at_block - 14 * 144
 
     db.execute("""SELECT short_channel_id, open->>'txid' FROM channels""")
     open_txid_map: Dict[str, str] = {txid: scid for scid, txid in db.fetchall()}
