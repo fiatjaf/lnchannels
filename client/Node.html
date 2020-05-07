@@ -142,6 +142,10 @@
       <table>
         <tbody>
           <tr>
+            <th>software</th>
+            <td>{node.software || ''}</td>
+          </tr>
+          <tr>
             <th>open channels</th>
             <td>{node.openchannels}</td>
           </tr>
@@ -180,7 +184,7 @@
         <tr>
           <th>with</th>
           <th>id</th>
-          <th>total satoshis</th>
+          <th>satoshis</th>
           <th>chain fee</th>
           <th>open</th>
           <th>close</th>
@@ -230,14 +234,21 @@
               style="width:{(100 * (channel.open.fee + channel.close.fee) / maxfee).toFixed(2)}%; background: var(--gold)"
             />
           </td>
-          <td>{channel.open.block}</td>
           <td>
-            {#if channel.close.block > 0} {channel.close.block} {/if}
+            {channel.open.block} {#if channel.funded !== null}({#if
+            channel.funded}them{:else}us{/if}) {/if}
+          </td>
+          <td>
+            {#if channel.close.block > 0} {channel.close.block} {#if
+            channel.closed !== null}({#if channel.closed}them{:else}us{/if})
+            {/if} {/if}
           </td>
           {#if channel.close.block > 0}
           <td>
-            {#if channel.close.type}closed as
-            <strong>{channel.close.type}</strong>{/if}
+            {#if channel.close.type}
+            <strong>{channel.close.type}-closed</strong>
+            {#if channel.letter} leaving here
+            <em>{channel.close.balance[channel.letter]}sat</em> {/if} {/if}
           </td>
           {:else}
           <td class:hidden="{direction !== 'outgoing'}">

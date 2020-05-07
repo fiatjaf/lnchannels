@@ -49,12 +49,6 @@ CREATE INDEX IF NOT EXISTS index_close ON channels USING gin (close);
 CREATE INDEX IF NOT EXISTS index_txs ON channels USING gin (txs);
 GRANT SELECT ON channels TO web_anon;
 
-CREATE TABLE IF NOT EXISTS try_later (
-  short_channel_id text PRIMARY KEY,
-  txid text,
-  tries int NOT NULL DEFAULT 1
-);
-
 CREATE TABLE IF NOT EXISTS nodealiases (
   pubkey text NOT NULL,
   alias text NOT NULL,
@@ -121,6 +115,7 @@ CREATE MATERIALIZED VIEW nodes AS
     agg.pubkey AS pubkey,
     nodealias.alias AS alias,
     nodealias.color AS color,
+    (SELECT implementation FROM implementations WHERE pubkey = agg.pubkey) AS software,
     agg.oldestchannel AS oldestchannel,
     coalesce(open.openchannels, 0) AS openchannels,
     agg.closedchannels AS closedchannels,
@@ -211,6 +206,69 @@ CREATE MATERIALIZED VIEW closetypes AS
   ORDER BY blockgroup;
 GRANT SELECT ON closetypes TO web_anon;
 
+CREATE MATERIALIZED VIEW implementations AS
+  WITH daemon (name, version, featurebits) AS (
+    VALUES
+      ('c-lightning', '0.6', '88'),
+      ('c-lightning', '0.6.1', '8a'),
+      ('c-lightning', '0.6.2', '8a'),
+      ('c-lightning', '0.6.3', '88'),
+      ('c-lightning', '0.7.0', '8a'),
+      ('c-lightning', '0.7.1', 'aa'),
+      ('c-lightning', '0.7.2.1', 'aa'),
+      ('c-lightning', '0.7.3', '28a2'),
+      ('c-lightning', '0.8.0', '02aaa2'),
+      ('c-lightning', '0.8.1', '02aaa2'),
+      ('c-lightning', '0.8.2-keysend', '8000000002aaa2'),
+      ('eclair', '0.3.1', '8a'),
+      ('eclair', '0.3.2', '0a8a'),
+      ('eclair', '0.3.3', '0a8a'),
+      ('eclair', '0.3.3-mpp', '028a8a'),
+      ('eclair', 'acinq_node', '0a8a8a'),
+      ('eclair', 'guess', '0200'),
+      ('eclair', '0.3.4', '0a8a'),
+      ('eclair', '0.3.4-wumbo', '080a8a'),
+      ('eclair', '0.3.4-mpp', '028a8a'),
+      ('eclair', '0.4', '0a8a'),
+      ('eclair', '0.4-wumbo', '080a8a'),
+      ('eclair', '0.4-mpp', '028a8a'),
+      ('eclair', '0.4-mpp-wumbo', '0a8a8a'),
+      ('lnd', '0.4.1', '08'),
+      ('lnd', '0.4.2', '08'),
+      ('lnd', '0.5', '82'),
+      ('lnd', '0.5.2', '82'),
+      ('lnd', '0.6', '81'),
+      ('lnd', '0.6.1', '81'),
+      ('lnd', '0.7.1', '81'),
+      ('lnd', '0.8.0', '2281'),
+      ('lnd', '0.8.1', '2281'),
+      ('lnd', '0.8.2', '2281'),
+      ('lnd', '0.9.0', '02a2a1'),
+      ('lnd', '0.9.1', '02a2a1'),
+      ('lnd', '0.9.2', '02a2a1'),
+      ('lnd', '0.10.0', '02a2a1'),
+      ('lnd', 'probable', '0a00'),
+      ('lnd', 'guess', '2200')
+  ), agg AS (
+    SELECT pubkey, array_agg(daemon.name) AS impl
+    FROM features
+    INNER JOIN daemon ON features = featurebits
+    GROUP BY pubkey
+  ), counts AS (
+    SELECT pubkey,
+      (SELECT count(*) FROM unnest(impl) AS v WHERE v = 'eclair') AS eclair,
+      (SELECT count(*) FROM unnest(impl) AS v WHERE v = 'lnd') AS lnd,
+      (SELECT count(*) FROM unnest(impl) AS v WHERE v = 'c-lightning') AS clightning
+    FROM agg
+  )
+  SELECT pubkey, CASE
+    WHEN eclair > clightning AND eclair > lnd THEN 'eclair'
+    WHEN clightning > lnd THEN 'c-lightning'
+    WHEN lnd > 0 THEN 'lnd'
+  END AS implementation
+  FROM counts;
+GRANT SELECT ON implementations TO web_anon;
+
 CREATE OR REPLACE FUNCTION home_chart(since_block integer)
 RETURNS TABLE (
   blockgroup int,
@@ -293,52 +351,6 @@ CREATE OR REPLACE FUNCTION crash (c channels) RETURNS bigint AS $$
     END
 $$ LANGUAGE SQL STABLE;
 
--- assign the node a daemon name and version from the features string
-CREATE OR REPLACE FUNCTION daemon (f features) RETURNS text AS $$
-  WITH daemon (name, version, featureset) AS (
-    VALUES
-      ('c-lightning', '0.6', '88'),
-      ('c-lightning', '0.6.1', '8a'),
-      ('c-lightning', '0.6.2', '8a'),
-      ('c-lightning', '0.6.3', '88'),
-      ('c-lightning', '0.7.0', '8a'),
-      ('c-lightning', '0.7.1', 'aa'),
-      ('c-lightning', '0.7.2.1', 'aa'),
-      ('c-lightning', '0.7.3', '28a2'),
-      ('c-lightning', '0.8.0', '02aaa2'),
-      ('c-lightning', '0.8.1', '02aaa2'),
-      ('eclair', '0.3.1', '8a'),
-      ('eclair', '0.3.2', '0a8a'),
-      ('eclair', '0.3.3', '0a8a'),
-      ('eclair', '0.3.3-custom', '028a8a'),
-      ('eclair', 'acinq_node', '0a8a8a'),
-      ('eclair', 'guess', '0200'),
-      ('lnd', '0.4.1', '08'),
-      ('lnd', '0.4.2', '08'),
-      ('lnd', '0.5', '82'),
-      ('lnd', '0.5.2', '82'),
-      ('lnd', '0.6', '81'),
-      ('lnd', '0.6.1', '81'),
-      ('lnd', '0.7.1', '81'),
-      ('lnd', '0.8.0', '2281'),
-      ('lnd', '0.8.1', '2281'),
-      ('lnd', '0.8.2', '2281'),
-      ('lnd', '0.9.0', '02a2a1'),
-      ('lnd', '0.9.1', '02a2a1'),
-      ('lnd', '0.9.2', '02a2a1')
-      ('lnd', 'guess', '2200')
-  )
-  SELECT name FROM daemon
-  WHERE featureset = f.features;
-$$ LANGUAGE SQL STABLE;
-
-CREATE OR REPLACE FUNCTION uniq (list jsonb) RETURNS jsonb AS $$
-  WITH elements AS (
-    SELECT DISTINCT value FROM jsonb_array_elements_text(list)
-  )
-  SELECT jsonb_agg(value) FROM elements
-$$ LANGUAGE SQL STABLE;
-
 CREATE OR REPLACE FUNCTION node_channels (nodepubkey text)
 RETURNS TABLE (
   short_channel_id text,
@@ -347,7 +359,10 @@ RETURNS TABLE (
   close jsonb,
   satoshis int,
   outpol jsonb,
-  inpol jsonb
+  inpol jsonb,
+  funded boolean, -- funded by us?
+  closed boolean, -- force-closed by us?
+  letter text -- we are 'a' or 'b'?
 ) AS $$
   SELECT
     channels.short_channel_id,
@@ -375,7 +390,18 @@ RETURNS TABLE (
         split_part(p_in.fee_per_millionth, '~', 2)::numeric(13),
       'delay',
         split_part(p_in.delay, '~', 2)::int
-    ) AS in
+    ) AS in,
+    (nodes->>funder != peer.pubkey) AS funded,
+    CASE
+      WHEN closer IS NOT NULL AND closer = 'a' THEN
+        nodes->>a != peer.pubkey
+      WHEN closer IS NOT NULL AND closer = 'b' THEN
+        nodes->>b != peer.pubkey
+    END AS closed,
+    CASE
+      WHEN peer.pubkey = nodes->>a THEN 'b'
+      WHEN peer.pubkey = nodes->>b THEN 'a'
+    END AS letter
   FROM channels
   LEFT OUTER JOIN nodes AS peer ON peer.pubkey = (nodes - nodepubkey)->>0
   LEFT OUTER JOIN (

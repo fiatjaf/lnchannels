@@ -8,7 +8,7 @@
   export let alias = null
   export let color = null
 
-  if (alias) {
+  if (alias !== null) {
     window.aliasPromises[pubkey] = Promise.resolve({alias, color})
   }
 

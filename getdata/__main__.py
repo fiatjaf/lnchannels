@@ -28,6 +28,8 @@ def main():
             chain_analysis(db)
 
         with conn.cursor() as db:
+            db.execute("REFRESH MATERIALIZED VIEW last_block")
+            db.execute("REFRESH MATERIALIZED VIEW implementations")
             db.execute("REFRESH MATERIALIZED VIEW nodes")
             db.execute("REFRESH MATERIALIZED VIEW globalstats")
             db.execute("REFRESH MATERIALIZED VIEW closetypes")

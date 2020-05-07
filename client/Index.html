@@ -35,7 +35,7 @@
     stats = await getContext('stats')
     topnodes = await (
       await fetch(
-        `/api/nodes?openchannels=gt.0&select=pubkey,alias,color,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity&order=openchannels.desc`,
+        `/api/nodes?openchannels=gt.0&select=pubkey,alias,color,software,openchannels,closedchannels,avg_duration,avg_open_fee,avg_close_fee,oldestchannel,capacity&order=openchannels.desc`,
         {
           headers: {
             'Range-Unit': 'items',
@@ -83,6 +83,7 @@
         <th>node</th>
         <th>open channels now</th>
         <th>total historical channels</th>
+        <th>software</th>
         <th>close rate (%)</th>
         <th>average channel duration (blocks)</th>
       </tr>
@@ -108,6 +109,7 @@
             style="width:{100 * (node.openchannels+ node.closedchannels) / stats.max_node_allchannels}%; background: var(--blue)"
           />
         </td>
+        <td>{node.software || ''}</td>
         <td>
           {(100 * node.closedchannels / node.openchannels).toFixed(0)}
         </td>
