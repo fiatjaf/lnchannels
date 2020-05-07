@@ -104,6 +104,12 @@
 </script>
 
 <style>
+  nav img {
+    height: 1em;
+  }
+  #title {
+    font-size: 1.5em;
+  }
   .search-item {
     font-family: monospace;
     padding: 0.1em 0.4em;
@@ -120,8 +126,11 @@
 <svelte:window on:click="{interceptClicks}" />
 
 <nav class="top-bar">
-  <a href="/" class="top-bar-title">lnchannels</a>
-  <div class="top-bar-link top-bar-title" style="width: 60%">
+  <a href="/" class="top-bar-title" id="title">
+    <img src="/icon.png" alt="logo" />
+    lnchannels
+  </a>
+  <div class="top-bar-link top-bar-title" style="width: 50%">
     <input
       bind:value="{searchQuery}"
       on:input="{search}"
