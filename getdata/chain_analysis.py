@@ -39,36 +39,8 @@ def group_run_separate_process(scids):
     with psycopg2.connect(POSTGRES_URL) as conn:
         conn.autocommit = True
         with conn.cursor() as db:
-            prepare(db)
-
             for scid in scids:
                 run_for_channel(db, scid)
-
-
-def prepare(db):
-    # prepare functions we're going to need
-    db.execute(
-        """
-CREATE FUNCTION pg_temp.inter (x jsonb, y jsonb) RETURNS text AS $$
-  SELECT xr.value
-  FROM jsonb_array_elements_text(x) AS xr
-  INNER JOIN jsonb_array_elements_text(y) AS yr
-          ON xr.value = yr.value
-$$ LANGUAGE SQL;
-
-CREATE FUNCTION pg_temp.diff (x jsonb, y jsonb) RETURNS text AS $$
-  SELECT (x - (SELECT array_agg(value) FROM jsonb_array_elements_text(y)))->>0
-$$ LANGUAGE SQL;
-
-CREATE FUNCTION pg_temp.matches (x jsonb, y jsonb) RETURNS boolean AS $$
-  SELECT x ?| (SELECT array_agg(value) FROM jsonb_array_elements_text(y))
-$$ LANGUAGE SQL;
-
-CREATE FUNCTION pg_temp.index (arr jsonb, item text) RETURNS int AS $$
-  SELECT CASE WHEN arr->>0 = item THEN 0 ELSE 1 END
-$$ LANGUAGE SQL;
-    """
-    )
 
 
 def run_for_channel(db, scid):
@@ -83,7 +55,7 @@ WITH matching AS (
          y.close AS y_close, y.txs AS y_txs
   FROM (SELECT * FROM channels WHERE short_channel_id = %s) AS x
   INNER JOIN channels AS y
-     ON pg_temp.matches(x.nodes, y.nodes)
+     ON matches(x.nodes, y.nodes)
     AND NOT x.nodes = y.nodes
 ), singlebalance AS (
   SELECT short_channel_id, nodes, a, funder, close
@@ -93,43 +65,43 @@ WITH matching AS (
     AND (close->'balance'->>'b')::int = 0
     AND close->>'type' != 'penalty'
 ), updates (scid, label, value) AS (
-    SELECT x_scid, 'a', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
+    SELECT x_scid, 'a', index(x_nodes, inter(x_nodes, y_nodes))
     FROM matching
     WHERE x_close->>'type' != 'penalty'
-      AND pg_temp.matches(x_txs->'a',
+      AND matches(x_txs->'a',
             coalesce(y_txs->'a', '[]'::jsonb) ||
             coalesce(y_txs->'b', '[]'::jsonb) ||
             coalesce(y_txs->'funding', '[]'::jsonb)
           )
   UNION
-    SELECT x_scid, 'b', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
+    SELECT x_scid, 'b', index(x_nodes, inter(x_nodes, y_nodes))
     FROM matching
     WHERE x_close->>'type' != 'penalty'
-      AND pg_temp.matches(x_txs->'b',
+      AND matches(x_txs->'b',
             coalesce(y_txs->'a', '[]'::jsonb) ||
             coalesce(y_txs->'b', '[]'::jsonb) ||
             coalesce(y_txs->'funding', '[]'::jsonb)
           )
   UNION
-    SELECT x_scid, 'ab', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
+    SELECT x_scid, 'ab', index(x_nodes, inter(x_nodes, y_nodes))
     FROM matching
     WHERE x_close->>'type' = 'penalty'
       AND (
-          pg_temp.matches(x_txs->'a',
+          matches(x_txs->'a',
             coalesce(y_txs->'a', '[]'::jsonb) ||
             coalesce(y_txs->'b', '[]'::jsonb) ||
             coalesce(y_txs->'funding', '[]'::jsonb)
           )
-       OR pg_temp.matches(x_txs->'b',
+       OR matches(x_txs->'b',
             coalesce(y_txs->'a', '[]'::jsonb) ||
             coalesce(y_txs->'b', '[]'::jsonb) ||
             coalesce(y_txs->'funding', '[]'::jsonb)
           )
       )
   UNION
-    SELECT x_scid, 'funder', pg_temp.index(x_nodes, pg_temp.inter(x_nodes, y_nodes))
+    SELECT x_scid, 'funder', index(x_nodes, inter(x_nodes, y_nodes))
     FROM matching
-    WHERE pg_temp.matches(x_txs->'funding',
+    WHERE matches(x_txs->'funding',
             coalesce(y_txs->'a', '[]'::jsonb) ||
             coalesce(y_txs->'b', '[]'::jsonb) ||
             coalesce(y_txs->'funding', '[]'::jsonb)
