@@ -60,3 +60,25 @@ RETURNS TABLE (
     sum(var) OVER (PARTITION BY pubkey ORDER BY block) AS nchannels
   FROM keyframes
 $$ LANGUAGE SQL STABLE;
+
+CREATE OR REPLACE FUNCTION node_policy_ranges(amount_msat int) RETURNS TABLE (
+  cap numeric(13),
+  fee_min numeric(13),
+  fee_max numeric(13)
+) AS $$
+  SELECT
+    nodes.pubkey,
+    capacity,
+    min(fee),
+    max(fee)
+  FROM nodes
+  INNER JOIN channels ON channels.nodes ? nodes.pubkey
+                     AND channels.close->>'block' IS NULL
+  INNER JOIN (
+    SELECT short_channel_id,
+      (base_fee_millisatoshi + fee_per_millionth * 1000000 / 1000000)::numeric(13) AS fee
+    FROM policies
+  ) AS p ON channels.short_channel_id = p.short_channel_id
+  WHERE openchannels > 0
+  GROUP BY nodes.pubkey, nodes.capacity;
+$$ LANGUAGE SQL STABLE;

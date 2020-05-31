@@ -49,6 +49,49 @@ CREATE INDEX IF NOT EXISTS index_close ON channels USING gin (close);
 CREATE INDEX IF NOT EXISTS index_txs ON channels USING gin (txs);
 GRANT SELECT ON channels TO web_anon;
 
+-- channel age function that works both for closed and open channels
+CREATE OR REPLACE FUNCTION age (c channels) RETURNS bigint AS $$
+  SELECT
+    CASE
+      WHEN c.close->>'block' IS NULL THEN -- open
+        (SELECT last_block FROM last_block) - (c.open->>'block')::bigint
+      ELSE -- closed
+        (c.close->>'block')::bigint - (c.open->>'block')::bigint
+    END
+$$ LANGUAGE SQL STABLE;
+
+-- assess how much a channel closure was bad
+CREATE OR REPLACE FUNCTION crash (c channels) RETURNS bigint AS $$
+  SELECT
+    CASE
+      WHEN c.close->>'type' = 'penalty' THEN
+        (c.close->'balance'->>c.closer)::int / 5000
+      WHEN c.close->>'type' = 'force' THEN
+        10
+        + (SELECT
+             sum(CASE WHEN value->>'offerer' = c.closer THEN 16 ELSE 8 END)
+           FROM jsonb_array_elements(c.close->'htlcs'))
+        + (CASE WHEN (c.close->'balance'->>'b')::int = 0 THEN 7 ELSE 0 END)
+        + (144 * 5
+          / ((c.close->>'block')::int - (c.open->>'block')::int))
+      ELSE 0
+    END
+$$ LANGUAGE SQL STABLE;
+
+-- translate short_channel_id into an integer and into a hex string
+CREATE FUNCTION scid_int (c channels) RETURNS bigint AS $$
+  SELECT
+    ((split_part(c.short_channel_id, 'x', 1)::bigint & 'xffffff'::bit(24)::bigint) << 40)
+  | ((split_part(c.short_channel_id, 'x', 2)::bigint & 'xffffff'::bit(24)::bigint) << 16)
+  | ((split_part(c.short_channel_id, 'x', 3)::bigint & 'xffff'::bit(24)::bigint))
+$$ LANGUAGE SQL IMMUTABLE;
+
+CREATE FUNCTION scid_hex (c channels) RETURNS text AS $$
+  SELECT to_hex(c.scid_int)
+$$ LANGUAGE SQL IMMUTABLE;
+
+select short_channel_id, channels.scid_int from channels limit 10;
+
 CREATE TABLE IF NOT EXISTS nodealiases (
   pubkey text NOT NULL,
   alias text NOT NULL,
@@ -106,9 +149,16 @@ CREATE MATERIALIZED VIEW nodes AS
               ORDER BY (open->>'block')::int DESC LIMIT 1)
       END - (open->>'block')::int) AS avg_duration,
       avg((open->>'fee')::int) AS avg_open_fee,
-      avg((close->>'fee')::int) AS avg_close_fee
+      avg((close->>'fee')::int) AS avg_close_fee,
+      jsonb_build_object(
+        'mutual', count(close->>'type' = 'mutual'),
+        'penalty', count(close->>'type' = 'penalty'),
+        'force', count(close->>'type' = 'force')
+      ) AS close_types
     FROM (
-      SELECT nodes->>0 AS pubkey, * FROM channels UNION ALL SELECT nodes->>1 AS pubkey, * FROM channels
+      SELECT nodes->>0 AS pubkey, * FROM channels
+        UNION ALL
+      SELECT nodes->>1 AS pubkey, * FROM channels
     )z GROUP BY pubkey
   )
   SELECT
@@ -122,7 +172,8 @@ CREATE MATERIALIZED VIEW nodes AS
     coalesce(open.capacity, 0) AS capacity,
     agg.avg_duration AS avg_duration,
     agg.avg_open_fee AS avg_open_fee,
-    agg.avg_close_fee AS avg_close_fee
+    agg.avg_close_fee AS avg_close_fee,
+    agg.close_types AS close_types
   FROM agg
   LEFT JOIN nodealias ON agg.pubkey = nodealias.pubkey
   LEFT JOIN open ON agg.pubkey = open.pubkey;
@@ -322,35 +373,6 @@ RETURNS TABLE (
   ORDER BY blockgroup
 $$ LANGUAGE SQL STABLE;
 
--- channel age function that works both for closed and open channels
-CREATE OR REPLACE FUNCTION age (c channels) RETURNS bigint AS $$
-  SELECT
-    CASE
-      WHEN c.close->>'block' IS NULL THEN -- open
-        (SELECT last_block FROM last_block) - (c.open->>'block')::bigint
-      ELSE -- closed
-        (c.close->>'block')::bigint - (c.open->>'block')::bigint
-    END
-$$ LANGUAGE SQL STABLE;
-
--- assess how much a channel closure was bad
-CREATE OR REPLACE FUNCTION crash (c channels) RETURNS bigint AS $$
-  SELECT
-    CASE
-      WHEN c.close->>'type' = 'penalty' THEN
-        (c.close->'balance'->>c.closer)::int / 5000
-      WHEN c.close->>'type' = 'force' THEN
-        10
-        + (SELECT
-             sum(CASE WHEN value->>'offerer' = c.closer THEN 16 ELSE 8 END)
-           FROM jsonb_array_elements(c.close->'htlcs'))
-        + (CASE WHEN (c.close->'balance'->>'b')::int = 0 THEN 7 ELSE 0 END)
-        + (144 * 5
-          / ((c.close->>'block')::int - (c.open->>'block')::int))
-      ELSE 0
-    END
-$$ LANGUAGE SQL STABLE;
-
 CREATE OR REPLACE FUNCTION node_channels (nodepubkey text)
 RETURNS TABLE (
   short_channel_id text,
@@ -457,6 +479,8 @@ RETURNS TABLE (
       OR open->>'txid' = (SELECT query FROM q)
       OR close->>'txid' = (SELECT query FROM q)
       OR open->>'address' = (SELECT query FROM q)
+      OR channels.scid_int::text = (SELECT query FROM q)
+      OR channels.scid_hex = (SELECT query FROM q)
   UNION ALL
     SELECT
       'node' AS kind,

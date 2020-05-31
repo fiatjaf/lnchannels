@@ -52,6 +52,7 @@
   $: namePromise = aliasPromise
     .then(a => a.alias)
     .then(name => (name !== '' ? name : abbr(pubkey)))
+    .catch(() => abbr(pubkey))
 
   var hasColor = false
   $: aliasPromise.then(a => {

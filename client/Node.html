@@ -247,17 +247,17 @@
           <td>
             {#if channel.close.type}
             <strong>{channel.close.type}-closed</strong>
-            {#if channel.letter} leaving here
-            <em>{channel.close.balance[channel.letter]}sat</em> {/if} {/if}
+            {#if channel.letter} for
+            <em>{channel.close.balance[channel.letter]}</em> ({(channel.close.balance[channel.letter] * 100 / channel.satoshis).toFixed(0)}%) {/if} {/if}
           </td>
           {:else}
           <td class:hidden="{direction !== 'outgoing'}">
-            {channel.outpol.rate / 10000}% (min {(channel.outpol.base /
-            1000).toFixed(3)} sat); delay of {channel.outpol.delay}
+            {channel.outpol.rate / 10000}% (base {(channel.outpol.base /
+            1000).toFixed(3)} sat); {channel.outpol.delay}lt
           </td>
           <td class:hidden="{direction !== 'incoming'}">
-            {channel.inpol.rate / 10000}% (min {(channel.inpol.base /
-            1000).toFixed(3)} sat); delay of {channel.inpol.delay}
+            {channel.inpol.rate / 10000}% (base {(channel.inpol.base /
+            1000).toFixed(3)} sat); {channel.inpol.delay}lt
           </td>
           {/if}
         </tr>

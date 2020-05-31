@@ -91,7 +91,7 @@
   onMount(async () => {
     let res = await (
       await fetch(
-        `/api/channels?select=short_channel_id,nodes,satoshis,open,close,a,b,funder,closer&short_channel_id=eq.${id}`
+        `/api/channels?select=short_channel_id,scid_int,scid_hex,nodes,satoshis,open,close,a,b,funder,closer&short_channel_id=eq.${id}`
       )
     ).json()
     if (res.length === 0) {
@@ -156,7 +156,19 @@
   <table>
     <tr>
       <th>short_channel_id</th>
-      <td>{channel.short_channel_id}</td>
+      <td>
+        <table>
+          <tr>
+            <td>{channel.short_channel_id}</td>
+          </tr>
+          <tr>
+            <td>{channel.scid_hex}</td>
+          </tr>
+          <tr>
+            <td>{channel.scid_int}</td>
+          </tr>
+        </table>
+      </td>
     </tr>
     <tr>
       <th>satoshis</th>
@@ -185,10 +197,10 @@
           <tr>
             {#each channel.nodes as pubkey}
             <td class="pubkey">
-              <a href="/node/{pubkey}">
-                <span class="abbr">{abbr(pubkey)}</span>
-                <span class="full">{pubkey}</span>
-              </a>
+              <a href="/node/{pubkey}"
+                ><span class="abbr">{abbr(pubkey)}</span
+                ><span class="full">{pubkey}</span></a
+              >
             </td>
             {/each}
           </tr>
@@ -279,16 +291,16 @@
       </caption>
       <thead>
         <tr>
-          <th>min fee</th>
+          <th>base fee (sat)</th>
           <th>fee %</th>
-          <th>delay</th>
+          <th>delay (min HTLC locktime)</th>
           <th>update</th>
         </tr>
       </thead>
       <tbody>
         {#each upwardpolicies as policy}
         <tr>
-          <td>{policy.base_fee_millisatoshi / 1000} sat</td>
+          <td>{policy.base_fee_millisatoshi / 1000}</td>
           <td>{policy.fee_per_millionth / 10000}</td>
           <td>{policy.delay}</td>
           <td>{date(policy.update_time)}</td>
@@ -306,7 +318,7 @@
       </caption>
       <thead>
         <tr>
-          <th>min fee</th>
+          <th>base fee</th>
           <th>fee %</th>
           <th>delay</th>
           <th>update</th>

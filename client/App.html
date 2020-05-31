@@ -37,17 +37,15 @@
         history.replace(location.pathname.replace('/channels/', '/channel/'))
       } else {
         let raw = location.pathname.replace(/\W/g, '')
-        if (raw.length >= 65 && raw.length <= 67) {
-          history.replace(`/node/${raw}`)
-        } else if (
-          raw.split('x').length === 3 &&
-          raw.length >= 10 &&
-          raw.length < 30
-        ) {
-          history.replace(`/channel/${raw}`)
-        } else {
-          routedComponent = NotFound
-        }
+        searchQuery = raw
+        tryToNavigate(raw)
+        searchResults.then(results => {
+          if (results.length === 0) {
+            routedComponent = NotFound
+            searchQuery = ''
+            searchResults = Promise.reject(null)
+          }
+        })
       }
     }, 0)
   }
@@ -91,15 +89,52 @@
   var searchQuery = ''
   var searchResults = Promise.reject(null)
 
-  const search = debounce(function() {
+  const searchDebounced = debounce(searchImmediately, 1200)
+
+  function search() {
+    searchResults = Promise.resolve([])
+    searchDebounced()
+  }
+
+  function searchImmediately() {
     if (searchQuery === '') return
     searchResults = fetch(`/api/rpc/search?query=${searchQuery}`).then(r =>
       r.json()
     )
-  }, 1200)
+  }
+
+  function submitSearch(e) {
+    e.preventDefault()
+    tryToNavigate(searchQuery.trim())
+  }
+
+  function tryToNavigate(destination) {
+    if (destination === '') return
+
+    if (destination.split('x').length === 3) {
+      history.push(`/channel/${destination}`)
+      return
+    }
+
+    if (
+      destination.length === 66 &&
+      destination.split('').filter(c => !isNaN(parseInt(c, 16))).length === 66
+    ) {
+      history.push(`/node/${destination}`)
+      return
+    }
+
+    searchImmediately()
+    searchResults.then(results => {
+      if (results.length > 0) {
+        history.push(results[0].url)
+        return
+      }
+    })
+  }
 
   function resultSelected() {
-    searchResults = []
+    searchResults = Promise.reject(null)
   }
 </script>
 
@@ -131,15 +166,23 @@
     lnchannels
   </a>
   <div class="top-bar-link top-bar-title" style="width: 50%">
-    <input
-      bind:value="{searchQuery}"
-      on:input="{search}"
-      placeholder="search node id or name, channel id or block"
-      style="width: 100%"
-    />
+    <form on:submit="{submitSearch}">
+      <input
+        bind:value="{searchQuery}"
+        on:input="{search}"
+        placeholder="search node id or name, channel id or block"
+        style="width: 100%"
+      />
+    </form>
   </div>
 
   <div class="top-bar-right">
+    <a
+      href="https://observablehq.com/collection/@fiatjaf/ln-bigsun-xyz"
+      target="_blank"
+      class="top-bar-link"
+      >More Charts</a
+    >
     <a href="/docs" class="top-bar-link">API</a>
     <a href="https://t.me/fiatjaf" class="top-bar-link">Contact</a>
   </div>
