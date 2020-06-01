@@ -2,7 +2,7 @@ from typing import Dict
 from tqdm import tqdm
 from bitcoin.bitcoin import JSONRPCError
 
-from .globals import bitcoin
+from .globals import bitcoin, last_block
 from .onchain import onclose
 
 
@@ -13,7 +13,7 @@ def inspectblocks(db):
     except:
         blockheight = 506425
 
-    end_at_block = bitcoin.getblockchaininfo()["blocks"]
+    end_at_block = last_block
 
     if blockheight > end_at_block - 14 * 144:
         # if we've reached the end and are up to speed with the blockchain

@@ -3,6 +3,7 @@ import psycopg2
 from .globals import POSTGRES_URL
 from .listchannels import listchannels
 from .inspectblocks import inspectblocks
+from .unknownclosetypes import unknownclosetypes
 from .listnodes import listnodes
 from .chain_analysis import chain_analysis
 
@@ -14,6 +15,10 @@ def main():
         with conn.cursor() as db:
             print("listing channels")
             listchannels(db)
+
+        with conn.cursor() as db:
+            print("rechecking unknown close types")
+            unknownclosetypes(db)
 
         with conn.cursor() as db:
             print("inspecting blocks")

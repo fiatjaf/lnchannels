@@ -9,3 +9,5 @@ SPARK_URL = os.getenv("SPARK_URL")
 SPARK_TOKEN = os.getenv("SPARK_TOKEN")
 
 bitcoin = BitcoinRPC(BITCOIN_RPC_ADDRESS, BITCOIN_RPC_USER, BITCOIN_RPC_PASSWORD)
+
+last_block = bitcoin.getblockchaininfo()["blocks"]

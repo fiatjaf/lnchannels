@@ -2,7 +2,7 @@ import json
 from typing import Dict
 
 from .utils import get_fee, get_outspends
-from .globals import bitcoin
+from .globals import bitcoin, last_block
 
 
 def onopen(
@@ -75,8 +75,14 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
         side = next_side
 
         if spend["spent"] == False:
-            # big indicator of mutual closure
-            kinds.add("any")
+            # we can't know what this is, maybe it's a mutual closure and the
+            # funds are waiting at someone's wallet, or it's a delayed output
+            # that wasn't spent yet because the time hasn't arrived
+            if blockheight + 3000 > last_block:
+                kinds.add("unknown")
+            else:
+                kinds.add("any")
+
             next_side = "b"
             balance[side] = amount
         else:
