@@ -142,7 +142,7 @@ CREATE MATERIALIZED VIEW nodes AS
   ), agg AS (
     SELECT pubkey,
       min((open->>'block')::int) AS oldestchannel,
-      count(close->>'block' IS NOT NULL) AS closedchannels,
+      count(close->>'block') AS closedchannels,
       avg(CASE WHEN close->>'block' IS NOT NULL
         THEN (close->>'block')::int
         ELSE (SELECT (open->>'block')::int FROM channels
@@ -151,9 +151,9 @@ CREATE MATERIALIZED VIEW nodes AS
       avg((open->>'fee')::int) AS avg_open_fee,
       avg((close->>'fee')::int) AS avg_close_fee,
       jsonb_build_object(
-        'mutual', count(close->>'type' = 'mutual'),
-        'penalty', count(close->>'type' = 'penalty'),
-        'force', count(close->>'type' = 'force')
+        'mutual', count(CASE WHEN close->>'type' = 'mutual' THEN true ELSE NULL END),
+        'penalty', count(CASE WHEN close->>'type' = 'penalty' THEN true ELSE NULL END),
+        'force', count(CASE WHEN close->>'type' = 'force' THEN true ELSE NULL END)
       ) AS close_types
     FROM (
       SELECT nodes->>0 AS pubkey, * FROM channels
@@ -349,7 +349,7 @@ RETURNS TABLE (
     UNION ALL
       -- ongoing opens
       SELECT ((open->>'block')::int/100)*100 AS blockgroup,
-        count((open->>'block')::int) AS opened,
+        count(open->>'block') AS opened,
         0 AS closed,
         sum(satoshis) AS cap_change,
         sum((open->>'fee')::int) AS fee,
@@ -361,7 +361,7 @@ RETURNS TABLE (
       -- ongoing closes
       SELECT ((close->>'block')::int/100)*100 AS blockgroup,
         0 AS opened,
-        count((close->>'block')::int) AS closed,
+        count(close->>'block') AS closed,
         -sum(satoshis) AS cap_change,
         sum((close->>'fee')::int) AS fee,
         sum(jsonb_array_length(close->'htlcs')) AS htlcs
