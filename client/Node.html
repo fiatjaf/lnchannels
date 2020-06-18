@@ -248,7 +248,9 @@
             {#if channel.close.type}
             <strong>{channel.close.type}-closed</strong>
             {#if channel.letter} for
-            <em>{channel.close.balance[channel.letter]}</em> ({(channel.close.balance[channel.letter] * 100 / channel.satoshis).toFixed(0)}%) {/if} {/if}
+            <em>{channel.close.balance[channel.letter]}</em>
+            ({(channel.close.balance[channel.letter] * 100 /
+            channel.satoshis).toFixed(0)}%) {/if} {/if}
           </td>
           {:else}
           <td class:hidden="{direction !== 'outgoing'}">

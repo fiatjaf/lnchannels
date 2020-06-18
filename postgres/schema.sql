@@ -399,9 +399,9 @@ RETURNS TABLE (
     satoshis,
     jsonb_build_object(
       'base',
-        split_part(p_out.fee_per_millionth, '~', 2)::numeric(13),
-      'rate',
         split_part(p_out.base_fee_millisatoshi, '~', 2)::numeric(13),
+      'rate',
+        split_part(p_out.fee_per_millionth, '~', 2)::numeric(13),
       'delay',
         split_part(p_out.delay, '~', 2)::int
     ) AS out,
