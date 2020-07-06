@@ -14,3 +14,4 @@ node_modules
 bigsun_missing.pkl
 last_inspected_channel
 last_block
+lnchannels.dump
