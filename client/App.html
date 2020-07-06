@@ -53,6 +53,11 @@
   function interceptClicks(e) {
     try {
       let url = new URL(e.target.href)
+
+      if (url.pathname === '/lnchannels.dump') {
+        return
+      }
+
       if (
         url.hostname === location.hostname &&
         url.pathname !== location.pathname
@@ -184,7 +189,9 @@
       >More Charts</a
     >
     <a href="/docs" class="top-bar-link">Docs</a>
-    <a href="/lnchannels.dump" class="top-bar-link">Database Download</a>
+    <a href="/lnchannels.dump" class="top-bar-link" download
+      >Database Download</a
+    >
     <a href="https://t.me/fiatjaf" class="top-bar-link">Contact</a>
   </div>
 </nav>
