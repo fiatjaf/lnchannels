@@ -5,8 +5,7 @@ deploy: static/bundle.js
 	rsync -r static nusakan-58:lnchannels
 
 dump:
-	godotenv fish -c 'pg_dump $$POSTGRES_URL > lnchannels.dump'
-	rsync -r lnchannels.dump nusakan-58:lnchannels/static/lnchannels.dump
+	godotenv bash -c 'ssh nusakan-58 "pg_dump $$POSTGRES_URL > lnchannels/static/lnchannels.dump"'
 
 getdata:
 	godotenv python -m getdata

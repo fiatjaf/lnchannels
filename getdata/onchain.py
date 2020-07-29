@@ -74,7 +74,7 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
         amount = int(tx["vout"][i]["value"] * 100000000)
         side = next_side
 
-        if spend["spent"] == False:
+        if spend["spent"] == False or not spend["status"]["confirmed"]:
             # we can't know what this is, maybe it's a mutual closure and the
             # funds are waiting at someone's wallet, or it's a delayed output
             # that wasn't spent yet because the time hasn't arrived
