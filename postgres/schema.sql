@@ -271,6 +271,8 @@ CREATE MATERIALIZED VIEW implementations AS
       ('c-lightning', '0.8.0', '02aaa2'),
       ('c-lightning', '0.8.1', '02aaa2'),
       ('c-lightning', '0.8.2-keysend', '8000000002aaa2'),
+      ('c-lightning', '0.9.0', '02aaa2'),
+      ('c-lightning', '0.9.0-wumbo', '0aaaa2'),
       ('eclair', '0.3.1', '8a'),
       ('eclair', '0.3.2', '0a8a'),
       ('eclair', '0.3.3', '0a8a'),
@@ -284,6 +286,10 @@ CREATE MATERIALIZED VIEW implementations AS
       ('eclair', '0.4-wumbo', '080a8a'),
       ('eclair', '0.4-mpp', '028a8a'),
       ('eclair', '0.4-mpp-wumbo', '0a8a8a'),
+      ('eclair', '0.4.1', '0a8a'),
+      ('eclair', '0.4.1-srk', '2a8a'),
+      ('eclair', '0.4.1-trmp', '080a8a'),
+      ('eclair', '0.4.1-srk-trmp-kys', '08000000082a8a'),
       ('lnd', '0.4.1', '08'),
       ('lnd', '0.4.2', '08'),
       ('lnd', '0.5', '82'),
@@ -299,7 +305,9 @@ CREATE MATERIALIZED VIEW implementations AS
       ('lnd', '0.9.2', '02a2a1'),
       ('lnd', '0.10.0', '02a2a1'),
       ('lnd', 'probable', '0a00'),
-      ('lnd', 'guess', '2200')
+      ('lnd', 'guess', '2200'),
+      ('lnd', '0.11', '02a2a1'),
+      ('lnd', '0.11-wumbo', '0aa2a1')
   ), agg AS (
     SELECT pubkey, array_agg(daemon.name) AS impl
     FROM features
