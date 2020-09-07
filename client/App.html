@@ -8,7 +8,7 @@
   import Index from './Index.html'
   import Node from './Node.html'
   import Channel from './Channel.html'
-  import API from './API.html'
+  import Docs from './Docs.html'
   import NotFound from './NotFound.html'
 
   const history = createBrowserHistory()
@@ -30,7 +30,7 @@
       } else if (location.pathname.slice(0, 9) === '/channel/') {
         routedComponent = Channel
       } else if (location.pathname === '/docs') {
-        routedComponent = API
+        routedComponent = Docs
       } else if (location.pathname.slice(0, 7) === '/nodes/') {
         history.replace(location.pathname.replace('/nodes/', '/node/'))
       } else if (location.pathname.slice(0, 10) === '/channels/') {
@@ -192,7 +192,6 @@
     <a href="/lnchannels.dump" class="top-bar-link" download
       >Database Download</a
     >
-    <a href="https://t.me/fiatjaf" class="top-bar-link">Contact</a>
   </div>
 </nav>
 

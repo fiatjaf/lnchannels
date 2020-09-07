@@ -8,7 +8,9 @@
   article {
     width: 90%;
     max-width: 900px;
-    margin: auto;
+    margin: 10px auto;
+    border-radius: 15px;
+    background-color: rgb(174, 232, 175, 0.5);
   }
   #methods div {
     margin-bottom: 20px;
@@ -17,7 +19,7 @@
     list-style: none;
     padding: none;
   }
-  h3 {
+  h4 {
     font-family: monospace;
     font-weight: bold;
   }
@@ -43,8 +45,39 @@
   />
 </svelte:head>
 
+<h1>About lnchannels and documentation</h1>
+
 <article>
-  <h1>Run your own instance of this site</h1>
+  <h2>About this website</h2>
+
+  <ul>
+    <li>It is ran by <a href="https://twitter.com/fiatjaf">@fiatjaf</a>.</li>
+    <li>
+      It is based on data collected by a <i>Python</i>
+      <a
+        href="https://github.com/fiatjaf/lnchannels/blob/master/getdata/__main__.py"
+        >script</a
+      >
+      that uses
+      <a href="https://github.com/ElementsProject/lightning/">c-lightning</a>,
+      <a href="https://github.com/fiatjaf/sparko">sparko</a>,
+      <a href="http://bitcoinknots.org/">Bitcoin Knots</a> and
+      <a href="https://github.com/Blockstream/esplora">Esplora</a>.
+    </li>
+    <li>
+      All data is stored on a
+      <a href="https://www.postgresql.org/">Postgres</a> database and served raw
+      by <a href="http://postgrest.org/en/v7.0.0/">PostgREST</a>.
+    </li>
+    <li>
+      The frontend is a static site built with
+      <a href="https://svelte.dev/">Svelte</a>.
+    </li>
+  </ul>
+</article>
+
+<article>
+  <h2>Run your own instance of this site</h2>
   <p>
     Get the source code and follow the instructions at
     <a href="https://github.com/fiatjaf/lnchannels"
@@ -54,7 +87,7 @@
 </article>
 
 <article>
-  <h1>API Docs</h1>
+  <h2>HTTP API</h2>
   <ul>
     <li>The base endpoint is <code class="code">{endpoint}</code>.</li>
     <li>
@@ -102,9 +135,9 @@
     .
   </ul>
   <div id="methods">
-    <h2>Methods</h2>
+    <h3>Methods</h3>
     <div>
-      <h3>/channels</h3>
+      <h4>/channels</h4>
       <p>
         Returns an array of plain channels. That includes close data and closure
         type if the channel was closed already, otherwise these values will be
@@ -193,7 +226,7 @@
       </ul>
     </div>
     <div>
-      <h3>/nodes</h3>
+      <h4>/nodes</h4>
       <p>
         Returns an array of nodes. That includes channel counts, capacity and
         other aggregated values.
@@ -234,7 +267,7 @@
       </ul>
     </div>
     <div>
-      <h3>/nodealiases</h3>
+      <h4>/nodealiases</h4>
       <p>
         Returns an array of aliases associated with a node. These mean the node
         was spotted using that alias at some point, during some interval of
@@ -264,7 +297,7 @@
       </ul>
     </div>
     <div>
-      <h3>/policies</h3>
+      <h4>/policies</h4>
       <p>
         Returns an array of fee policies associated with a channel and a
         direction. Direction "0" means it's from "node1" to "node0" and
@@ -297,7 +330,7 @@
       </ul>
     </div>
     <div>
-      <h3>/rpc/node_channels</h3>
+      <h4>/rpc/node_channels</h4>
       <p>
         Returns an array of channels with data from the point-of-view of the
         node specified so they have more data about the channel peer and the
@@ -330,7 +363,7 @@
       >
     </div>
     <div>
-      <h3>/rpc/search</h3>
+      <h4>/rpc/search</h4>
       <p>
         Returns an array of search results that can specify either nodes or
         channels. The fields searched are the node pubkey, transactions (open
