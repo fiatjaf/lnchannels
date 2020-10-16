@@ -10,6 +10,7 @@
     max-width: 900px;
     margin: 10px auto;
     border-radius: 15px;
+    padding: 1px 10px 2px;
     background-color: rgb(174, 232, 175, 0.5);
   }
   #methods div {
@@ -46,6 +47,27 @@
 </svelte:head>
 
 <h1>About lnchannels and documentation</h1>
+
+<article>
+  <h2>Frequently asked questions</h2>
+  <p>
+    <b
+      >Why is the number of open channels here much bigger than other explorers
+      show?</b
+    >
+    Because we keep counting the channels as open until their funding
+    transaction is spent on the chain. Apparently many channels are abandoned
+    and nodes turned off, sometimes temporarily, and the channels remain
+    technically open, but cease to be announced to the rest of the network.
+    Other explorers remove these inactive channels from their count of open
+    channels, but we don't.
+  </p>
+  <p>
+    <b>Why are you missing channel xyz?</b> Because we only gather the list of
+    announced channels once per day, on average, so if a channel was opened and
+    closed before we had a chance to see it we will never know it existed.
+  </p>
+</article>
 
 <article>
   <h2>About this website</h2>
