@@ -37,7 +37,7 @@ How to run
 
 ### Updating the data
 
-1. Run [sparko](https://github.com/fiatjaf/lightningd-gjson-rpc/tree/master/cmd/sparko) and generate a key for it with at least the permissions to call `listchannels` and `listnodes`.
+1. Run [sparko](https://github.com/fiatjaf/sparko) and generate a key for it with at least the permissions to call `listchannels` and `listnodes`.
 2. Run [bitcoind](https://bitcoincore.org/en/download/) with `txindex=1`.
 3. Somehow set the following environment variables:
   ```
