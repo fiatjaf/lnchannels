@@ -6,6 +6,7 @@ deploy: static/bundle.js
 
 dump:
 	godotenv bash -c 'ssh fuyue-421 "pg_dump $$POSTGRES_URL > lnchannels/static/lnchannels.dump"'
+	godotenv bash -c 'ssh fuyue-421 "echo \"COPY (SELECT * FROM channels) TO STDOUT WITH CSV HEADER\" | psql $$POSTGRES_URL > lnchannels/static/channels.csv"'
 
 getdata:
 	godotenv python -m getdata
