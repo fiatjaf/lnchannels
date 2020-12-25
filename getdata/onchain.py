@@ -158,6 +158,9 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
             spends = get_outspends(htlc["txid"])
 
             try:
+                # spend here refer to the transaction that spends the
+                # transaction that is spending the htlc (htlc+2), so witness/script
+                # are relative to the transaction that spends the htlc (htlc+1)
                 spend = spends[htlc["vout"]]
                 if not spend["spent"]:
                     raise IndexError
@@ -165,10 +168,16 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
                 f = bitcoin.getrawtransaction(spend["txid"], True)
                 witness = f["vin"][spend["vin"]]["txinwitness"]
                 script = bitcoin.decodescript(witness[-1])["asm"]
+
+                # if the node closing the channel is trying to spend
+                # the htlc, the htlc+1 tx must have an OP_CHECKSEQUENCEVERIFY
+                # (which we are calling the "covenant") in it, which we
+                # should be able to see here in the script we got from htlc+2
                 if "OP_CHECKSEQUENCEVERIFY" in script:
                     has_covenant = True
                     for s in get_outspends(spend["txid"]):
                         if s["spent"]:
+                            # this is for future chainanalysis using this tx
                             txs[closer].add(s["txid"])
                 else:
                     raise IndexError
@@ -177,21 +186,33 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
                 has_covenant = False
                 for s in spends:
                     if s["spent"]:
+                        # this is for future chainanalysis using this tx
                         txs[noncloser].add(s["txid"])
 
+            # now we determine if the htlc was fulfilled or not and to whom
+            if "OP_NOTIF" in htlc["script"]:
+                # OP_NOTIF indicates it the closer who offered, we don't care about
+                # the meaning, it's just a naïve text matching, see templates at:
+                # https://github.com/lightningnetwork/lightning-rfc/blob/master/03-transactions.md#offered-htlc-outputs
+                offerer = closer
+
+                # when the htlc is spent with a covenant it means the closer got it.
+                # here the receiver is noncloser.
+                if has_covenant:
+                    fulfilled = False
+                else:
+                    fulfilled = True
+            else:
+                # (reverse of the above)
+                offerer = noncloser
+                # here the receiver is the closer.
+                if has_covenant:
+                    fulfilled = True
+                else:
+                    fulfilled = False
+
             htlcs.append(
-                {
-                    "amount": htlc["amount"],
-                    # OP_NOTIF indicates it was offered to the closer
-                    "offerer": noncloser if "OP_NOTIF" in htlc["script"] else closer,
-                    # when the htlc is spent with a covenant it means the closer got it
-                    "fulfilled": True
-                    if (
-                        ("OP_NOTIF" in htlc["script"] and has_covenant)
-                        or ("OP_NOTIF" not in htlc["script"] and not has_covenant)
-                    )
-                    else False,
-                }
+                {"amount": htlc["amount"], "offerer": offerer, "fulfilled": fulfilled}
             )
 
     db.execute(
