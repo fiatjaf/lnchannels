@@ -1,6 +1,6 @@
 import requests
 
-from .globals import bitcoin, ESPLORA_URL
+from .globals import bitcoin, ESPLORA_URL1, ESPLORA_URL2
 
 
 def get_fee(tx):
@@ -27,12 +27,12 @@ def get_outspends(txid):
 
 def call_esplora(path):
     try:
-        r = requests.get(ESPLORA_URL + path)
+        r = requests.get(ESPLORA_URL1 + path)
         if r.ok:
             return r.json()
     except requests.exceptions.ConnectionError:
         pass
 
-    r = requests.get("https://mempool.space/electrs" + path)
+    r = requests.get(ESPLORA_URL2 + path)
     r.raise_for_status()
     return r.json()

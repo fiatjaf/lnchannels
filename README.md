@@ -47,7 +47,8 @@ SPARK_TOKEN=accesskeygeneratedonstep1
 BITCOIN_RPC_ADDRESS=http://localhost:8332
 BITCOIN_RPC_USER=bitcoinrpcuser
 BITCOIN_RPC_PASSWORD=bitcoinrpcpass
-ESPLORA_URL=https://mempool.space/api
+ESPLORA_URL1=https://mempool.space/api
+ESPLORA_URL2=https://blockstream.info/api
   ```
 4. You can place all of the above in a file called `.env` and later user a program like [godotenv](https://github.com/joho/godotenv) to run things while setting them.
 5. Install Python (must be python3.8 or greater I believe) dependencies from `requirements.txt` using any method you like (I do `virtualenv venv && venv/bin/pip install -r requirements.txt`).
