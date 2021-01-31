@@ -11,6 +11,6 @@ dump:
 getdata:
 	godotenv python -m getdata
 
-routine: backup getdata
+routine: getdata dump
 
 .PHONY: getdata dump
