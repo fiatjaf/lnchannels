@@ -17,7 +17,7 @@ ORDER BY short_channel_id
     )
 
     # this is not urgent work, but very demanding, split it across 20 days avg
-    rows = [row for row in db.fetchall() if random.random() < 0.1]
+    rows = [row for row in db.fetchall() if random.random() < 0.05]
 
     # also split it into 5 groups which we will put in 5 different processes
     groups = ([], [], [], [], [])
