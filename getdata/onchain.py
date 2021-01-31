@@ -112,7 +112,7 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
                     next_side = "b"
 
                     for next_spend in get_outspends(spend["txid"]):
-                        if next_spend["spent"]:
+                        if next_spend["spent"] and next_spend["status"]["confirmed"]:
                             txs[side].add(next_spend["txid"])
 
                     # in case of a delayed output, we know this was the force-closer
@@ -162,7 +162,7 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
                 # transaction that is spending the htlc (htlc+2), so witness/script
                 # are relative to the transaction that spends the htlc (htlc+1)
                 spend = spends[htlc["vout"]]
-                if not spend["spent"]:
+                if not spend["spent"] or not spend["status"]["confirmed"]:
                     raise IndexError
 
                 f = bitcoin.getrawtransaction(spend["txid"], True)
@@ -176,7 +176,7 @@ def onclose(db, blockheight, blocktime, tx, vin, scid):
                 if "OP_CHECKSEQUENCEVERIFY" in script:
                     has_covenant = True
                     for s in get_outspends(spend["txid"]):
-                        if s["spent"]:
+                        if s["spent"] and s["status"]["confirmed"]:
                             # this is for future chainanalysis using this tx
                             txs[closer].add(s["txid"])
                 else:

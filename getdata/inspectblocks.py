@@ -37,7 +37,8 @@ def inspectblocks(db):
                         scid = open_txid_map.get(vin["txid"])
                         if scid and vin["vout"] == int(scid.split("x")[2]):
                             onclose(db, blockheight, block["time"], tx, vin, scid)
-            except JSONRPCError:
+            except JSONRPCError as exc:
+                print(exc)
                 return
 
             blockheight += 1
