@@ -1,6 +1,6 @@
 from typing import Dict
 from tqdm import tqdm
-from bitcoin.bitcoin import JSONRPCError
+from bitcoin_requests.bitcoin import JSONRPCError
 
 from .globals import bitcoin, last_block
 from .onchain import onclose

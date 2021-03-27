@@ -1,6 +1,7 @@
+import random
 import requests
 
-from .globals import bitcoin, ESPLORA_URL1, ESPLORA_URL2
+from .globals import bitcoin
 
 
 def get_fee(tx):
@@ -25,14 +26,23 @@ def get_outspends(txid):
     return call_esplora(f"/tx/{txid}/outspends")
 
 
-def call_esplora(path):
-    try:
-        r = requests.get(ESPLORA_URL1 + path)
-        if r.ok:
-            return r.json()
-    except requests.exceptions.ConnectionError:
-        pass
+esploras = [
+    "https://mempool.space/api",
+    "https://blockstream.info/api",
+    "https://mempool.ninja/api",
+    "https://mempool.emzy.de/api",
+]
 
-    r = requests.get(ESPLORA_URL2 + path)
-    r.raise_for_status()
-    return r.json()
+
+def call_esplora(path):
+    random.shuffle(esploras)
+
+    for host in esploras:
+        try:
+            r = requests.get(host + path)
+            if r.ok:
+                return r.json()
+        except requests.exceptions.ConnectionError:
+            pass
+
+    raise Exception("ALL ESPLORAS HAVE FAILED")

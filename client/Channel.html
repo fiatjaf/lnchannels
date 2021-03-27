@@ -80,9 +80,7 @@
             }))
       : null
 
-  const id = getContext('history')
-    .location.pathname.split('/')
-    .slice(-1)[0]
+  const id = getContext('history').location.pathname.split('/').slice(-1)[0]
 
   onMount(async () => {
     stats = await getContext('stats')
@@ -123,12 +121,6 @@
     max-width: 190px;
     white-space: pre-wrap;
     word-break: break-all;
-  }
-  .pubkey:not(:hover) .full {
-    display: none;
-  }
-  .pubkey:hover .abbr {
-    display: none;
   }
 </style>
 
@@ -197,10 +189,7 @@
           <tr>
             {#each channel.nodes as pubkey}
             <td class="pubkey">
-              <a href="/node/{pubkey}"
-                ><span class="abbr">{abbr(pubkey)}</span
-                ><span class="full">{pubkey}</span></a
-              >
+              <a href="/node/{pubkey}">{abbr(pubkey)}</a>
             </td>
             {/each}
           </tr>

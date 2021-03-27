@@ -1,3 +1,4 @@
 bitcoin-requests
 requests
 psycopg2
+tqdm
